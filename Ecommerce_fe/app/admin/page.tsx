@@ -5,8 +5,11 @@ import { useAuth } from '@/lib/AuthContext'
 import { useToast } from '@/components/Toast'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { AddProductDialog } from '@/components/AddProductDialog'
 import { AddCategoryDialog } from '@/components/AddCategoryDialog'
+import { apiClient } from '@/lib/apiClient'
+import { Product } from '@/lib/types'
 
 export default function AdminPage() {
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -15,6 +18,8 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [isAddProductOpen, setIsAddProductOpen] = useState(false)
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false)
+  const [products, setProducts] = useState<Product[]>([])
+  const [productsLoading, setProductsLoading] = useState(false)
 
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || user?.role !== 'admin')) {
@@ -22,6 +27,31 @@ export default function AdminPage() {
       router.push('/')
     }
   }, [isAuthenticated, user, isLoading, router, addToast])
+
+  // Load products when Products tab is active
+  useEffect(() => {
+    if (activeTab === 'products') {
+      loadProducts()
+    }
+  }, [activeTab])
+
+  const loadProducts = async () => {
+    setProductsLoading(true)
+    try {
+      const response = await apiClient.getProducts({
+        page: 1,
+        limit: 100,
+      })
+      if (response.data) {
+        setProducts(response.data)
+      }
+    } catch (error) {
+      addToast('Failed to load products', 'error')
+      console.error('[v0] Load products error:', error)
+    } finally {
+      setProductsLoading(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -47,7 +77,7 @@ export default function AdminPage() {
             <span className="hidden sm:inline font-heading text-lg font-semibold">Admin Panel</span>
           </Link>
           <div className="text-sm text-muted-foreground">
-            Welcome, {user?.name}
+            Welcome, {user?.full_name}
           </div>
         </div>
       </header>
@@ -119,11 +149,82 @@ export default function AdminPage() {
                 Add Product
               </button>
             </div>
-            <div className="bg-card border border-border rounded-lg p-6">
-              <p className="text-muted-foreground text-center py-8">
-                No products yet. Use the API to add products.
-              </p>
-            </div>
+
+            {productsLoading ? (
+              <div className="bg-card border border-border rounded-lg p-6">
+                <p className="text-muted-foreground text-center py-8">Loading products...</p>
+              </div>
+            ) : products.length > 0 ? (
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Image</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Title</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Description</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Price</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Stock</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Rating</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((product) => (
+                      <tr key={product.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          {product.thumbnail ? (
+                            <div className="relative w-12 h-12 rounded overflow-hidden">
+                              <Image
+                                src={product.thumbnail}
+                                alt={product.title}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded bg-muted flex items-center justify-center text-muted-foreground text-xs">
+                              No image
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-foreground font-medium">{product.title}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground truncate max-w-xs">{product.description}</td>
+                        <td className="px-6 py-4 text-sm text-foreground font-semibold">${product.price.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{product.stock}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          <div className="flex items-center gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <svg
+                                key={i}
+                                className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'fill-yellow-500' : 'fill-muted'}`}
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
+                              </svg>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            product.is_published 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {product.is_published ? 'Published' : 'Draft'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-lg p-6">
+                <p className="text-muted-foreground text-center py-8">
+                  No products yet. Click "Add Product" to create one.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -166,7 +267,7 @@ export default function AdminPage() {
             <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-semibold text-foreground">{user?.name}</p>
+                  <p className="font-semibold text-foreground">{user?.full_name}</p>
                   <p className="text-sm text-muted-foreground">{user?.email}</p>
                 </div>
                 <span className="px-3 py-1 bg-accent text-accent-foreground rounded-full text-sm font-semibold">

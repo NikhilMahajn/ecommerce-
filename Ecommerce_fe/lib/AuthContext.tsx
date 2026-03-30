@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Load token from localStorage on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token')
+    console.log('[v0] Restoring auth - saved token:', !!savedToken)
     if (savedToken) {
       setToken(savedToken)
       apiClient.setToken(savedToken)
@@ -35,9 +36,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadProfile = useCallback(async () => {
     try {
-      const response = await apiClient.getProfile()
+      const response = await apiClient.getMe()
       if (response.data?.user) {
         setUser(response.data.user)
+      } else if (response.data && !response.error) {
+        // If response.data exists, try to set it as user directly
+        setUser(response.data)
+      } else if (response.error) {
+        console.error('[v0] Profile load error:', response.error)
+        // If profile fetch fails, still keep the token as we have it
+        // The user can still perform actions with the token
       }
     } catch (error) {
       console.error('[v0] Profile load error:', error)
@@ -93,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     token,
     isLoading,
-    isAuthenticated: !!user,
+    isAuthenticated: !!token,
     login,
     signup,
     logout,

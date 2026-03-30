@@ -24,9 +24,13 @@ export interface Product {
   category_id: string
   category: Category
   specs: Record<string, string>
-  stock: boolean
+  stock: number
   rating: number
   reviews: number
+  thumbnail?: string
+  is_published?: boolean
+  brand?: string
+  discount_percentage?: number
   createdAt: string
 }
 

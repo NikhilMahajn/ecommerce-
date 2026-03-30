@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { apiClient } from '@/lib/apiClient'
 import { useToast } from '@/components/Toast'
+import { CldUploadWidget } from 'next-cloudinary'
 
 interface AddProductDialogProps {
   isOpen: boolean
@@ -307,20 +308,53 @@ export function AddProductDialog({ isOpen, onClose, onSuccess }: AddProductDialo
             </div>
           </div>
 
-          {/* Thumbnail URL */}
+          {/* Thumbnail Upload */}
           <div>
-            <label htmlFor="thumbnail" className="block text-sm font-semibold text-foreground mb-2">
-              Thumbnail URL *
+            <label className="block text-sm font-semibold text-foreground mb-2">
+              Product Thumbnail *
             </label>
-            <input
-              id="thumbnail"
-              type="url"
-              name="thumbnail"
-              value={formData.thumbnail}
-              onChange={handleChange}
-              placeholder="https://example.com/thumbnail.jpg"
-              className="w-full px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
-            />
+            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-accent transition-colors">
+              <CldUploadWidget
+                uploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET}
+                onSuccess={(result: any) => {
+                  const uploadedUrl = result.info.secure_url
+                  setFormData(prev => ({
+                    ...prev,
+                    thumbnail: uploadedUrl
+                  }))
+                  addToast('Image uploaded successfully', 'success')
+                }}
+                onError={(error: any) => {
+                  console.error('Upload error:', error)
+                  addToast(error.message || 'Failed to upload image', 'error')
+                }}
+              >
+                {({ open }) => (
+                  <div className="cursor-pointer" onClick={() => open()}>
+                    <p className="text-sm text-muted-foreground mb-2">Click to upload product thumbnail</p>
+                    <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 50MB</p>
+                  </div>
+                )}
+              </CldUploadWidget>
+            </div>
+            
+            {/* Image Preview */}
+            {formData.thumbnail && (
+              <div className="mt-4 relative group">
+                <img 
+                  src={formData.thumbnail} 
+                  alt="Thumbnail preview"
+                  className="w-full h-48 object-cover rounded-lg border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, thumbnail: '' }))}
+                  className="absolute top-2 right-2 bg-destructive text-destructive-foreground px-3 py-1 rounded text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Product Images */}

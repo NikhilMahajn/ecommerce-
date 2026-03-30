@@ -1,16 +1,21 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
 import { ProductCard } from '@/components/ProductCard'
 import { useToast } from '@/components/Toast'
 import { Product, CartItem } from '@/lib/types'
 import { apiClient } from '@/lib/apiClient'
+import { useAuth } from '@/lib/AuthContext'
 
 export default function Home() {
+  const router = useRouter()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [cart, setCart] = useState<CartItem[]>([])
+  const [cartId, setCartId] = useState<string | null>(null)
   const [showCart, setShowCart] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
@@ -20,6 +25,76 @@ export default function Home() {
   useEffect(() => {
     loadProducts()
   }, [searchTerm, selectedCategory])
+
+  // Load cart when authenticated (wait for auth to finish loading)
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      loadCart()
+    }
+  }, [isAuthenticated, authLoading])
+
+  const loadCart = async () => {
+    try {
+      const response = await apiClient.getCart({
+        page: 1,
+        limit: 10,
+      })
+      console.log('[v0] Cart API response:', response)
+      
+      if (response.data) {
+        let cartItems: CartItem[] = []
+        let cartId: string | null = null
+        
+        // Handle array of carts - extract cart_items from the first cart
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          const firstCart = response.data[0]
+          cartId = String(firstCart.id)
+          
+          // If cart has cart_items array (nested structure from API)
+          if (firstCart.cart_items && Array.isArray(firstCart.cart_items)) {
+            cartItems = firstCart.cart_items.map((item: any) => ({
+              productId: String(item.product_id),
+              product: item.product,
+              quantity: Number(item.quantity),
+            }))
+          }
+          // Otherwise treat the array items as direct cart items
+          else if (firstCart.product_id && firstCart.product) {
+            cartItems = response.data.map((item: any) => ({
+              productId: String(item.product_id),
+              product: item.product,
+              quantity: Number(item.quantity),
+            }))
+          }
+        }
+        // Handle paginated object response with items property
+        else if (response.data.items && Array.isArray(response.data.items)) {
+          cartItems = response.data.items.map((item: any) => ({
+            productId: String(item.product_id),
+            product: item.product,
+            quantity: Number(item.quantity),
+          }))
+        }
+        
+        console.log('[v0] Parsed cart items:', cartItems)
+        console.log('[v0] Cart ID:', cartId)
+        setCart(cartItems)
+        setCartId(cartId)
+      }
+    } catch (error) {
+      console.error('[v0] Load cart error:', error)
+    }
+  }
+
+  // Helper to format cart items for API
+  const formatCartItemsForAPI = (items: CartItem[]) => {
+    return items
+      .filter((item) => item.productId && typeof item.quantity === 'number')
+      .map((item) => ({
+        product_id: String(item.productId),
+        quantity: Number(item.quantity),
+      }))
+  }
 
   const loadProducts = async () => {
     setIsLoading(true)
@@ -40,37 +115,149 @@ export default function Home() {
   }
 
   const handleAddToCart = (product: Product) => {
+    if (!isAuthenticated) {
+      addToast('Please log in to add items to cart', 'error')
+      router.push('/login')
+      return
+    }
+
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id)
+      let updatedCart: CartItem[]
+      
       if (existing) {
-        return prev.map((item) =>
+        updatedCart = prev.map((item) =>
           item.productId === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         )
+      } else {
+        updatedCart = [...prev, { productId: product.id, product, quantity: 1 }]
       }
-      return [...prev, { productId: product.id, product, quantity: 1 }]
+
+      // Send to API with validated data
+      const cartItems = formatCartItemsForAPI(updatedCart)
+      console.log('[v0] Sending cart to API:', cartItems)
+
+      apiClient
+        .addToCart(cartItems)
+        .then((response) => {
+          if (response.error) {
+            addToast('Failed to add to cart', 'error')
+            console.error('[v0] Add to cart error:', response.error)
+          } else {
+            addToast(`${product.title} added to cart`, 'success')
+            // Reload cart to get updated cartId
+            loadCart()
+          }
+        })
+        .catch((error) => {
+          addToast('Failed to add to cart', 'error')
+          console.error('[v0] Add to cart error:', error)
+        })
+
+      return updatedCart
     })
-    addToast(`${product.name} added to cart`, 'success')
   }
 
   const handleRemoveFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.productId !== productId))
+    setCart((prev) => {
+      const updatedCart = prev.filter((item) => item.productId !== productId)
+
+      // If cart is now empty, delete the entire cart
+      if (updatedCart.length === 0) {
+        if (cartId) {
+          console.log('[v0] Cart is empty, deleting cart with ID:', cartId)
+          apiClient
+            .deleteCart(cartId)
+            .then((response) => {
+              if (response.error) {
+                addToast('Failed to delete cart', 'error')
+                console.error('[v0] Delete cart error:', response.error)
+              } else {
+                addToast('Cart cleared', 'success')
+                setCartId(null)
+              }
+            })
+            .catch((error) => {
+              addToast('Failed to delete cart', 'error')
+              console.error('[v0] Delete cart error:', error)
+            })
+        }
+      } else {
+        // Cart still has items, update it
+        const cartItems = formatCartItemsForAPI(updatedCart)
+        console.log('[v0] Updating cart after removing item, CartID:', cartId, 'Items:', cartItems)
+        
+        if (cartId) {
+          apiClient
+            .updateCart(cartId, cartItems)
+            .then((response) => {
+              if (response.error) {
+                addToast('Failed to remove from cart', 'error')
+                console.error('[v0] Remove from cart error:', response.error)
+              } else {
+                addToast('Removed from cart', 'success')
+              }
+            })
+            .catch((error) => {
+              addToast('Failed to remove from cart', 'error')
+              console.error('[v0] Remove from cart error:', error)
+            })
+        }
+      }
+
+      return updatedCart
+    })
   }
 
   const handleUpdateQuantity = (productId: string, quantity: number) => {
     if (quantity <= 0) {
       handleRemoveFromCart(productId)
     } else {
-      setCart((prev) =>
-        prev.map((item) =>
+      setCart((prev) => {
+        const updatedCart = prev.map((item) =>
           item.productId === productId ? { ...item, quantity } : item
         )
-      )
+
+        // Send to API with validated data
+        if (!cartId) {
+          addToast('Loading cart, please try again', 'error')
+          loadCart()
+          return updatedCart
+        }
+
+        const cartItems = formatCartItemsForAPI(updatedCart)
+        console.log('[v0] Updating cart with ID:', cartId, 'Items:', cartItems)
+
+        apiClient
+          .updateCart(cartId, cartItems)
+          .then((response) => {
+            if (response.error) {
+              addToast('Failed to update cart', 'error')
+              console.error('[v0] Update cart error:', response.error)
+              // Reload cart to refresh cartId
+              loadCart()
+            } else {
+              console.log('[v0] Cart updated successfully')
+            }
+          })
+          .catch((error) => {
+            addToast('Failed to update cart', 'error')
+            console.error('[v0] Update cart error:', error)
+            // Reload cart to refresh cartId
+            loadCart()
+          })
+
+        return updatedCart
+      })
     }
   }
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+  const cartTotal = cart.reduce((sum, item) => {
+    if (!item.product) return sum
+    return sum + item.product.price * item.quantity
+  }, 0)
 
   return (
     <main className="min-h-screen bg-background">
@@ -155,6 +342,7 @@ export default function Home() {
                     key={product.id}
                     product={product}
                     onAddToCart={handleAddToCart}
+                    isAuthenticated={isAuthenticated}
                   />
                 ))}
               </div>
@@ -195,10 +383,10 @@ export default function Home() {
           {cart.length > 0 ? (
             <>
               <div className="space-y-4 mb-6">
-                {cart.map((item) => (
+                {cart.filter((item) => item.product).map((item) => (
                   <div key={item.productId} className="border border-border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-foreground">{item.product.name}</h3>
+                      <h3 className="font-semibold text-foreground">{item.product?.name || 'Product'}</h3>
                       <button
                         onClick={() => handleRemoveFromCart(item.productId)}
                         className="text-destructive hover:bg-destructive/10 p-1 rounded"
@@ -209,7 +397,7 @@ export default function Home() {
                       </button>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">
-                      ${item.product.price.toFixed(2)} each
+                      ${item.product?.price?.toFixed(2) || '0.00'} each
                     </p>
                     <div className="flex items-center gap-2">
                       <button
@@ -232,7 +420,7 @@ export default function Home() {
                         +
                       </button>
                       <span className="ml-auto font-semibold text-foreground">
-                        ${(item.product.price * item.quantity).toFixed(2)}
+                        ${(item.product?.price && typeof item.product.price === 'number' ? item.product.price * item.quantity : 0).toFixed(2)}
                       </span>
                     </div>
                   </div>

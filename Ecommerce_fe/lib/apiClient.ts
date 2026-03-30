@@ -79,6 +79,10 @@ class ApiClient {
     return this.request('/auth/profile')
   }
 
+  async getMe() {
+    return this.request('/me/')
+  }
+
   // Products endpoints
   async getProducts(params?: {
     page?: number
@@ -129,6 +133,45 @@ class ApiClient {
     return this.request('/categories', {
       method: 'POST',
       body: JSON.stringify(data),
+    })
+  }
+
+  // Cart endpoints
+  async addToCart(cartItems: Array<{ product_id: string; quantity: number }>) {
+    return this.request('/carts', {
+      method: 'POST',
+      body: JSON.stringify({ cart_items: cartItems }),
+    })
+  }
+
+  async getCart(params?: {
+    page?: number
+    limit?: number
+  }) {
+    const query = new URLSearchParams()
+    if (params) {
+      if (params.page !== undefined) query.append('page', String(params.page))
+      if (params.limit !== undefined) query.append('limit', String(params.limit))
+    }
+    return this.request(`/carts?${query.toString()}`)
+  }
+
+  async updateCart(cartId: string | number, cartItems: Array<{ product_id: string; quantity: number }>) {
+    return this.request(`/carts/${cartId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ cart_items: cartItems }),
+    })
+  }
+
+  async deleteCart(cartId: string | number) {
+    return this.request(`/carts/${cartId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async deleteFromCart(productId: string) {
+    return this.request(`/carts/${productId}`, {
+      method: 'DELETE',
     })
   }
 
