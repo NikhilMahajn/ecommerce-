@@ -1,0 +1,44 @@
+# NextJS directories
+Ecommerce_fe/node_modules/
+Ecommerce_fe/.next/
+Ecommerce_fe/.vercel/
+Ecommerce_fe/dist/
+Ecommerce_fe/build/
+Ecommerce_fe/out/
+Ecommerce_fe/.turbo/
+
+# FastAPI directories
+Ecommerce-Api/__pycache__/
+Ecommerce-Api/.venv/
+Ecommerce-Api/venv/
+Ecommerce-Api/env/
+Ecommerce-Api/.env
+Ecommerce-Api/.env.local
+Ecommerce-Api/.pytest_cache/
+Ecommerce-Api/.mypy_cache/
+Ecommerce-Api/htmlcov/
+Ecommerce-Api/.coverage
+Ecommerce-Api/*.pyc
+Ecommerce-Api/*.pyo
+Ecommerce-Api/*.egg-info/
+Ecommerce-Api/dist/
+Ecommerce-Api/build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.env.local.php
+.phalcon/
+.tern-port
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
