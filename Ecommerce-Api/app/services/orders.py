@@ -3,6 +3,7 @@ from app.models.models import Order, OrderItem, Product, User, Cart, CartItem
 from app.schemas.orders import OrderCreate, OrderUpdate
 from app.utils.responses import ResponseHandler
 from app.core.security import get_current_user
+from app.services.analytics import ProductAnalyticsService
 
 
 class OrderService:
@@ -89,6 +90,15 @@ class OrderService:
             user_cart.total_amount = 0
             db.commit()
         
+        # Track purchases in analytics after main transaction completes
+        for item_data in order_items_data:
+            product_id = item_data['product_id']
+            quantity = item_data['quantity']
+            try:
+                ProductAnalyticsService.track_purchase(db, product_id, quantity, commit=True)
+            except Exception as e:
+                print(f"Failed to track purchase for product {product_id}: {str(e)}")
+        
         # Eagerly load order_items relationship for proper serialization
         order = db.query(Order).options(selectinload(Order.order_items)).filter(Order.id == db_order.id).first()
         
@@ -108,6 +118,15 @@ class OrderService:
             order.status = updated_order.status
         
         db.commit()
+        
+        # Track purchase in analytics if status is changed to completed
+        if updated_order.status == "completed":
+            try:
+                for order_item in order.order_items:
+                    ProductAnalyticsService.track_purchase(db, order_item.product_id, order_item.quantity, commit=True)
+            except Exception as e:
+                print(f"Failed to track purchase analytics: {str(e)}")
+        
         db.refresh(order)
         return ResponseHandler.update_success("Order", order.id, order)
 
@@ -120,11 +139,23 @@ class OrderService:
         if not order:
             return ResponseHandler.not_found_error("Order", order_id)
         
-        # Restore product stock
+        # Restore product stock and analytics if order was completed
         for order_item in order.order_items:
             product = db.query(Product).filter(Product.id == order_item.product_id).first()
             if product:
                 product.stock += order_item.quantity
+                
+                # Reverse purchase tracking if order was completed
+                if order.status == "completed":
+                    try:
+                        from app.models.models import ProductAnalytics
+                        analytics = db.query(ProductAnalytics).filter(
+                            ProductAnalytics.product_id == order_item.product_id
+                        ).first()
+                        if analytics and analytics.purchases >= order_item.quantity:
+                            analytics.purchases -= order_item.quantity
+                    except Exception as e:
+                        print(f"Failed to reverse purchase analytics: {str(e)}")
         
         db.delete(order)
         db.commit()

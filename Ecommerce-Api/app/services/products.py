@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.models.models import Product, Category
 from app.schemas.products import ProductCreate, ProductUpdate
 from app.utils.responses import ResponseHandler
+from app.services.analytics import ProductAnalyticsService
 
 
 class ProductService:
@@ -16,6 +17,14 @@ class ProductService:
         product = db.query(Product).filter(Product.id == product_id).first()
         if not product:
             ResponseHandler.not_found_error("Product", product_id)
+        
+        # Track product view
+        try:
+            ProductAnalyticsService.track_view(db, product_id, commit=True)
+        except Exception as e:
+            # If analytics tracking fails, still return the product
+            print(f"Failed to track product view: {str(e)}")
+        
         return ResponseHandler.get_single_success(product.title, product_id, product)
 
     @staticmethod

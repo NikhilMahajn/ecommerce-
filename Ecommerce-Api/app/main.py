@@ -1,6 +1,10 @@
-from app.routers import products, categories, carts, users, auth, accounts,orders
+from app.routers import products, categories, carts, users, auth, accounts, orders, analytics, pricing
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.workers.pricing_worker import start_pricing_worker, stop_pricing_worker
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -47,7 +51,7 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://ecommerce-nre8.vercel.app"
+    "https://ecommerce-delta-bice-74.vercel.app/"
 ]
 
 app.add_middleware(
@@ -65,4 +69,22 @@ app.include_router(users.router)
 app.include_router(accounts.router)
 app.include_router(auth.router)
 app.include_router(orders.router)
+app.include_router(analytics.router)
+app.include_router(pricing.router)
+
+
+# Startup event - start background workers
+@app.on_event("startup")
+async def startup_event():
+    """Start background workers on application startup"""
+    logger.info("Starting background workers")
+    start_pricing_worker()
+
+
+# Shutdown event - stop background workers
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background workers on application shutdown"""
+    logger.info("Stopping background workers")
+    stop_pricing_worker()
 

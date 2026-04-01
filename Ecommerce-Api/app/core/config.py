@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -13,6 +14,9 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
+
+    # Groq API Config (Optional - for dynamic pricing)
+    groq_api_key: str
 
     class Config:
         env_file = ".env"

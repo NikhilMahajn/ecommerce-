@@ -4,6 +4,7 @@ from app.schemas.carts import CartUpdate, CartCreate
 from app.utils.responses import ResponseHandler
 from sqlalchemy.orm import joinedload
 from app.core.security import get_current_user
+from app.services.analytics import ProductAnalyticsService
 
 
 class CartService:
@@ -55,10 +56,19 @@ class CartService:
             total_amount += subtotal
 
             cart_items.append(cart_item)
+        
         cart_db = Cart(cart_items=cart_items, user_id=user_id, total_amount=total_amount, **cart_dict)
         db.add(cart_db)
         db.commit()
         db.refresh(cart_db)
+        
+        # Track cart additions in analytics after main transaction completes
+        for product_id, quantity in products_map.items():
+            try:
+                ProductAnalyticsService.track_cart_add(db, product_id, quantity, commit=True)
+            except Exception as e:
+                print(f"Failed to track cart addition for product {product_id}: {str(e)}")
+        
         return ResponseHandler.create_success("Cart", cart_db.id, cart_db)
 
     # Update Cart & CartItem
@@ -102,8 +112,15 @@ class CartService:
             total_amount += subtotal
 
         cart.total_amount = total_amount
-
         db.commit()
+
+        # Track cart addition in analytics after main transaction completes
+        for product_id, quantity in products_map.items():
+            try:
+                ProductAnalyticsService.track_cart_add(db, product_id, quantity, commit=True)
+            except Exception as e:
+                print(f"Failed to track cart addition for product {product_id}: {str(e)}")
+
         db.refresh(cart)
         return ResponseHandler.update_success("cart", cart.id, cart)
 

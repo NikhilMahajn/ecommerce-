@@ -94,6 +94,9 @@ class Product(Base):
     # Relationship with order items
     order_items = relationship("OrderItem", back_populates="product")
 
+    # Relationship with product analytics
+    analytics = relationship("ProductAnalytics", back_populates="product", uselist=False, cascade="all, delete-orphan")
+
 
 class Order(Base):
     __tablename__ = "orders"
@@ -125,3 +128,16 @@ class OrderItem(Base):
     # Relationship with order and product
     order = relationship("Order", back_populates="order_items")
     product = relationship("Product", back_populates="order_items")
+
+class ProductAnalytics(Base):
+    __tablename__ = "product_analytics"
+
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), primary_key=True)
+    views = Column(Integer, default=0, nullable=False)
+    cart_adds = Column(Integer, default=0, nullable=False)
+    purchases = Column(Integer, default=0, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False)
+
+    # Relationship with product
+    product = relationship("Product", back_populates="analytics")
