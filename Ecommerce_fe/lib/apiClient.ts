@@ -1,6 +1,6 @@
 import { ApiResponse, AuthResponse } from './types'
 
-const API_BASE = 'http://172.17.0.1:8000'
+const API_BASE = 'http://0.0.0.0:8000'
 
 type LogoutCallback = () => void
 let logoutCallback: LogoutCallback | null = null
