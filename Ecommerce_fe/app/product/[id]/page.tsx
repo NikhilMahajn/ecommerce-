@@ -1,19 +1,16 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useParams } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
 import { useToast } from '@/components/Toast'
 import { Product, CartItem } from '@/lib/types'
 import { apiClient } from '@/lib/apiClient'
 import Link from 'next/link'
 
-interface ProductDetailPageProps {
-  params: {
-    slug: string
-  }
-}
-
-export default function ProductDetailPage({ params }: ProductDetailPageProps) {
+export default function ProductDetailPage() {
+  const params = useParams()
+  const id = params?.id as string
   const [product, setProduct] = useState<Product | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [quantity, setQuantity] = useState(1)
@@ -22,15 +19,19 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   const { addToast } = useToast()
 
   useEffect(() => {
-    loadProduct()
-  }, [params.slug])
+    if (id) {
+      loadProduct()
+    }
+  }, [id])
 
   const loadProduct = async () => {
     setIsLoading(true)
+    
     try {
-      const response = await apiClient.getProduct(params.slug)
-      if (response.data?.product) {
-        setProduct(response.data.product)
+      const response = await apiClient.getProduct(id)
+      if (response.data) {
+        
+        setProduct(response.data)
       } else {
         addToast('Product not found', 'error')
       }
@@ -109,19 +110,27 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
             Products
           </Link>
           <span>/</span>
-          <span className="text-foreground">{product.name}</span>
+          <span className="text-foreground">{product.title}</span>
         </div>
 
         {/* Product Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16">
           {/* Image */}
-          <div className="bg-muted rounded-lg h-96 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <svg className="w-20 h-20 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <p>{product.name}</p>
-            </div>
+          <div className="bg-muted rounded-lg h-96 flex items-center justify-center overflow-hidden">
+            {product.thumbnail ? (
+              <img
+                src={product.thumbnail}
+                alt={product.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-center text-muted-foreground">
+                <svg className="w-20 h-20 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p>{product.title}</p>
+              </div>
+            )}
           </div>
 
           {/* Details */}
@@ -130,7 +139,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               <div className="mb-4">
                 <p className="text-sm text-muted-foreground mb-2">{product.category?.name}</p>
                 <h1 className="font-heading text-4xl font-bold text-foreground mb-4">
-                  {product.name}
+                  {product.title}
                 </h1>
               </div>
 
@@ -140,14 +149,14 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
                   {[...Array(5)].map((_, i) => (
                     <svg
                       key={i}
-                      className={`w-5 h-5 ${i < Math.floor(product.rating) ? 'fill-accent' : 'fill-muted'}`}
+                      className={`w-5 h-5 ${i < Math.floor(product.rating || 0) ? 'fill-accent' : 'fill-muted'}`}
                       viewBox="0 0 20 20"
                     >
                       <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
                     </svg>
                   ))}
                 </div>
-                <span className="text-muted-foreground">({product.reviews} reviews)</span>
+                <span className="text-muted-foreground">({product.reviews || 0} reviews)</span>
               </div>
 
               {/* Price */}
@@ -163,7 +172,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               </p>
 
               {/* Specs */}
-              {Object.keys(product.specs).length > 0 && (
+              {product.specs && Object.keys(product.specs).length > 0 && (
                 <div className="mb-8">
                   <h3 className="font-heading text-lg font-semibold text-foreground mb-4">
                     Specifications
@@ -205,16 +214,16 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
                   </button>
                 </div>
                 <span className="text-muted-foreground">
-                  {product.inStock ? 'In Stock' : 'Out of Stock'}
+                  {product.stock != 0 ? 'In Stock' : 'Out of Stock'}
                 </span>
               </div>
 
               <button
                 onClick={handleAddToCart}
-                disabled={!product.inStock}
+                disabled={product.stock === 0}
                 className="w-full py-4 bg-primary text-primary-foreground font-heading text-lg font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+                {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
               </button>
             </div>
           </div>
@@ -248,7 +257,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               <div className="space-y-4 mb-6">
                 {cart.map((item) => (
                   <div key={item.productId} className="border border-border rounded-lg p-4">
-                    <h3 className="font-semibold text-foreground mb-2">{item.product.name}</h3>
+                    <h3 className="font-semibold text-foreground mb-2">{item.product.title}</h3>
                     <p className="text-sm text-muted-foreground mb-3">
                       ${item.product.price.toFixed(2)} x {item.quantity}
                     </p>

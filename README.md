@@ -7,6 +7,7 @@ A full-stack, modern e-commerce application built with Next.js and FastAPI. This
 ## 🎯 Project Overview
 
 This e-commerce platform is a production-ready web application that enables users to:
+
 - Browse and search for products by category
 - Manage shopping carts with real-time updates
 - Create accounts and authenticate securely
@@ -14,6 +15,7 @@ This e-commerce platform is a production-ready web application that enables user
 - Manage user profiles and addresses
 
 Admin users can:
+
 - Add and manage products
 - Organize products into categories
 - View and manage orders
@@ -51,37 +53,37 @@ The application follows a **client-server architecture** with a clear separation
 
 ### **Frontend (Ecommerce_fe)**
 
-| Technology | Purpose |
-|------------|---------|
-| **Next.js 16** | React framework with App Router, SSR, and API routes |
-| **React 19** | UI library for building interactive components |
-| **TypeScript** | Type-safe JavaScript for better code quality |
-| **Tailwind CSS** | Utility-first CSS framework for styling |
-| **Shadcn/ui** | Pre-built, accessible UI components |
-| **React Hook Form** | Efficient form state management |
-| **Zod** | Schema validation library |
-| **Axios** | HTTP client for API communication |
-| **Cloudinary** | Cloud-based image storage and optimization |
-| **Lucide React** | Icon library |
-| **Sonner** | Toast notification system |
-| **pnpm** | Fast, disk space-efficient package manager |
+| Technology          | Purpose                                              |
+| ------------------- | ---------------------------------------------------- |
+| **Next.js 16**      | React framework with App Router, SSR, and API routes |
+| **React 19**        | UI library for building interactive components       |
+| **TypeScript**      | Type-safe JavaScript for better code quality         |
+| **Tailwind CSS**    | Utility-first CSS framework for styling              |
+| **Shadcn/ui**       | Pre-built, accessible UI components                  |
+| **React Hook Form** | Efficient form state management                      |
+| **Zod**             | Schema validation library                            |
+| **Axios**           | HTTP client for API communication                    |
+| **Cloudinary**      | Cloud-based image storage and optimization           |
+| **Lucide React**    | Icon library                                         |
+| **Sonner**          | Toast notification system                            |
+| **pnpm**            | Fast, disk space-efficient package manager           |
 
 ### **Backend (Ecommerce-Api)**
 
-| Technology | Purpose |
-|------------|---------|
-| **FastAPI** | Modern, fast web framework for building APIs |
-| **Python 3.x** | Core backend language |
-| **SQLAlchemy** | ORM for database operations |
-| **Pydantic** | Data validation and serialization |
-| **Alembic** | Database migration tool |
-| **PostgreSQL** | Relational database |
-| **psycopg2** | PostgreSQL adapter for Python |
-| **python-jose** | JWT token creation and verification |
-| **bcrypt** | Password hashing and verification |
-| **python-multipart** | Form data parsing |
-| **python-dotenv** | Environment variable management |
-| **CORS Middleware** | Cross-Origin Resource Sharing support |
+| Technology           | Purpose                                      |
+| -------------------- | -------------------------------------------- |
+| **FastAPI**          | Modern, fast web framework for building APIs |
+| **Python 3.x**       | Core backend language                        |
+| **SQLAlchemy**       | ORM for database operations                  |
+| **Pydantic**         | Data validation and serialization            |
+| **Alembic**          | Database migration tool                      |
+| **PostgreSQL**       | Relational database                          |
+| **psycopg2**         | PostgreSQL adapter for Python                |
+| **python-jose**      | JWT token creation and verification          |
+| **bcrypt**           | Password hashing and verification            |
+| **python-multipart** | Form data parsing                            |
+| **python-dotenv**    | Environment variable management              |
+| **CORS Middleware**  | Cross-Origin Resource Sharing support        |
 
 ---
 
@@ -168,6 +170,7 @@ Ecommerce/
 ## 🚀 Features
 
 ### **Customer Features**
+
 - ✅ User registration and authentication
 - ✅ Browse products by category
 - ✅ View product details
@@ -178,6 +181,7 @@ Ecommerce/
 - ✅ User profile management
 
 ### **Admin Features**
+
 - ✅ Add new products with image uploads (via Cloudinary)
 - ✅ Create and manage product categories
 - ✅ View all orders
@@ -185,6 +189,7 @@ Ecommerce/
 - ✅ User management
 
 ### **Security Features**
+
 - ✅ JWT-based authentication
 - ✅ Password hashing with bcrypt
 - ✅ Role-based access control (User/Admin)
@@ -197,6 +202,7 @@ Ecommerce/
 ## 🛠️ Getting Started
 
 ### **Prerequisites**
+
 - Node.js 18+ (for frontend)
 - Python 3.10+ (for backend)
 - PostgreSQL 12+ (database)
@@ -206,23 +212,27 @@ Ecommerce/
 ### **Backend Setup**
 
 1. **Navigate to backend directory:**
+
    ```bash
    cd Ecommerce-Api
    ```
 
 2. **Create and activate virtual environment:**
+
    ```bash
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 4. **Set up environment variables:**
    Create a `.env` file in `Ecommerce-Api/` with:
+
    ```env
    DATABASE_URL=postgresql://user:password@localhost:5432/ecommerce
    SECRET_KEY=your_secret_key_here
@@ -231,6 +241,7 @@ Ecommerce/
    ```
 
 5. **Run database migrations:**
+
    ```bash
    alembic upgrade head
    ```
@@ -244,17 +255,20 @@ Ecommerce/
 ### **Frontend Setup**
 
 1. **Navigate to frontend directory:**
+
    ```bash
    cd Ecommerce_fe
    ```
 
 2. **Install dependencies:**
+
    ```bash
    pnpm install
    ```
 
 3. **Set up environment variables:**
    Create a `.env.local` file with:
+
    ```env
    NEXT_PUBLIC_API_URL=http://localhost:8000
    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
@@ -277,25 +291,26 @@ Once the backend is running, access the interactive API documentation:
 
 ### **Main API Endpoints**
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/register` | User registration |
-| POST | `/auth/login` | User login |
-| GET | `/products` | List all products |
-| GET | `/products/{id}` | Get product details |
-| GET | `/categories` | List all categories |
-| POST | `/cart/add` | Add item to cart |
-| GET | `/cart` | Get cart items |
-| POST | `/orders` | Create new order |
-| GET | `/orders` | Get user orders |
-| POST | `/admin/products` | Add new product (admin) |
-| POST | `/admin/categories` | Add new category (admin) |
+| Method | Endpoint            | Description              |
+| ------ | ------------------- | ------------------------ |
+| POST   | `/auth/register`    | User registration        |
+| POST   | `/auth/login`       | User login               |
+| GET    | `/products`         | List all products        |
+| GET    | `/products/{id}`    | Get product details      |
+| GET    | `/categories`       | List all categories      |
+| POST   | `/cart/add`         | Add item to cart         |
+| GET    | `/cart`             | Get cart items           |
+| POST   | `/orders`           | Create new order         |
+| GET    | `/orders`           | Get user orders          |
+| POST   | `/admin/products`   | Add new product (admin)  |
+| POST   | `/admin/categories` | Add new category (admin) |
 
 ---
 
 ## 🔄 Key Workflows
 
 ### **Authentication Flow**
+
 1. User registers with email and password
 2. Password is hashed using bcrypt
 3. User receives JWT access and refresh tokens
@@ -303,6 +318,7 @@ Once the backend is running, access the interactive API documentation:
 5. All subsequent requests include JWT in Authorization header
 
 ### **Shopping Flow**
+
 1. User browses products by category
 2. Adds items to cart (stored in context/state)
 3. Views cart summary with pricing
@@ -318,6 +334,7 @@ For detailed checkout implementation, see [ORDER_CHECKOUT_IMPLEMENTATION.md](ORD
 ## 🗄️ Database Schema
 
 The application uses **PostgreSQL** with the following main tables:
+
 - `users` - User accounts and profiles
 - `products` - Product information
 - `categories` - Product categories
@@ -332,6 +349,7 @@ All tables include timestamps (`created_at`, `updated_at`) for audit trails.
 ## 📝 Development Guidelines
 
 ### **Frontend**
+
 - Use TypeScript for type safety
 - Follow React best practices with hooks
 - Use Tailwind CSS for styling
@@ -339,6 +357,7 @@ All tables include timestamps (`created_at`, `updated_at`) for audit trails.
 - Validate user input with React Hook Form + Zod
 
 ### **Backend**
+
 - Follow FastAPI best practices
 - Use type hints with Python
 - Implement proper exception handling

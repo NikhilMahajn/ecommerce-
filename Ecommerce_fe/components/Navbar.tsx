@@ -52,8 +52,8 @@ export function Navbar({ cartItemCount = 0, onCartClick }: NavbarProps) {
           {/* Right Actions */}
           <div className="flex items-center gap-4">
             {/* Cart Button */}
-            <button
-              onClick={onCartClick}
+            <Link
+              href="/cart"
               className="relative p-2 hover:bg-muted rounded-lg transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,7 +64,7 @@ export function Navbar({ cartItemCount = 0, onCartClick }: NavbarProps) {
                   {cartItemCount}
                 </span>
               )}
-            </button>
+            </Link>
 
             {/* Auth Links */}
             {isAuthenticated ? (
@@ -127,6 +127,9 @@ export function Navbar({ cartItemCount = 0, onCartClick }: NavbarProps) {
             </Link>
             <Link href="/" className="block px-4 py-2 text-foreground hover:bg-muted">
               About
+            </Link>
+            <Link href="/cart" className="block px-4 py-2 text-foreground hover:bg-muted">
+              Cart
             </Link>
           </div>
         )}

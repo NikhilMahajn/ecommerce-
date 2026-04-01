@@ -2,6 +2,7 @@ export interface User {
   id: string
   email: string
   full_name: string
+  address?: string
   role: 'user' | 'admin'
   createdAt: string
 }
@@ -56,9 +57,19 @@ export interface Order {
 
 export interface AuthResponse {
   message: string
+  user?: User
+  token?: {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+  }
   data?: {
     user: User
-    token: string
+    token: {
+      access_token: string
+      refresh_token: string
+      expires_in: number
+    }
   }
   error?: string
 }

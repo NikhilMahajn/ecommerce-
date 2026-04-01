@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { User } from './types'
-import { apiClient } from './apiClient'
+import { apiClient, setLogoutCallback } from './apiClient'
 
 interface AuthContextType {
   user: User | null
@@ -21,13 +21,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Setup logout callback for apiClient
+  useEffect(() => {
+    setLogoutCallback(() => {
+      console.log('[Auth] Auto logout triggered by API')
+      logout()
+    })
+  }, [])
+
   // Load token from localStorage on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token')
-    console.log('[v0] Restoring auth - saved token:', !!savedToken)
+    const savedRefreshToken = localStorage.getItem('refresh_token')
+    console.log('[Auth] Restoring auth - saved token:', !!savedToken)
+    
     if (savedToken) {
       setToken(savedToken)
       apiClient.setToken(savedToken)
+      if (savedRefreshToken) {
+        apiClient.setRefreshToken(savedRefreshToken)
+      }
       loadProfile()
     } else {
       setIsLoading(false)
@@ -40,15 +53,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.data?.user) {
         setUser(response.data.user)
       } else if (response.data && !response.error) {
-        // If response.data exists, try to set it as user directly
         setUser(response.data)
       } else if (response.error) {
-        console.error('[v0] Profile load error:', response.error)
-        // If profile fetch fails, still keep the token as we have it
-        // The user can still perform actions with the token
+        console.error('[Auth] Profile load error:', response.error)
       }
     } catch (error) {
-      console.error('[v0] Profile load error:', error)
+      console.error('[Auth] Profile load error:', error)
     } finally {
       setIsLoading(false)
     }
@@ -58,19 +68,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true)
     try {
       const response = await apiClient.login(username, password)
-      console.log('Login response:', response)
+      console.log('[Auth] Login response:', response)
       
-      let newToken: string | null = null
-      
-      newToken = response.token.access_token
+      const newToken = response.token?.access_token
+      const refreshToken = response.token?.refresh_token
       
       if (response.user && newToken) {
         setToken(newToken)
         setUser(response.user)
         apiClient.setToken(newToken)
+        if (refreshToken) {
+          apiClient.setRefreshToken(refreshToken)
+          localStorage.setItem('refresh_token', refreshToken)
+        }
         localStorage.setItem('auth_token', newToken)
       } else {
-        console.error('Token extraction failed:', { hasUser: !!response.user, token: newToken, response })
+        console.error('[Auth] Token extraction failed:', { hasUser: !!response.user, token: newToken, response })
         throw new Error(response.error || 'Login failed - could not extract token')
       }
     } finally {
@@ -94,7 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null)
     setUser(null)
     apiClient.setToken(null)
+    apiClient.setRefreshToken(null)
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
   }, [])
 
   const value: AuthContextType = {

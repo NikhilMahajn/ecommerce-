@@ -18,9 +18,15 @@ class User(Base):
 
     # New column for role
     role = Column(Enum("admin", "user", name="user_roles"), nullable=False, server_default="user")
+    
+    # Address field
+    address = Column(String, nullable=True)
 
     # Relationship with carts
     carts = relationship("Cart", back_populates="user")
+
+    # Relationship with orders
+    orders = relationship("Order", back_populates="user")
 
 
 class Cart(Base):
@@ -84,3 +90,38 @@ class Product(Base):
 
     # Relationship with cart items
     cart_items = relationship("CartItem", back_populates="product")
+
+    # Relationship with order items
+    order_items = relationship("OrderItem", back_populates="product")
+
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, nullable=False, unique=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(Enum("pending", "processing", "completed", "cancelled", name="order_status"), nullable=False, server_default="pending")
+    total_amount = Column(Float, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False)
+
+    # Relationship with user
+    user = relationship("User", back_populates="orders")
+
+    # Relationship with order items
+    order_items = relationship("OrderItem", back_populates="order")
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id = Column(Integer, primary_key=True, nullable=False, unique=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    price = Column(Float, nullable=False)
+    subtotal = Column(Float, nullable=False)
+
+    # Relationship with order and product
+    order = relationship("Order", back_populates="order_items")
+    product = relationship("Product", back_populates="order_items")

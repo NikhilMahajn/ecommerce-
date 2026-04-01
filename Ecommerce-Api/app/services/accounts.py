@@ -20,8 +20,9 @@ class AccountService:
         if not db_user:
             ResponseHandler.not_found_error("User", user_id)
 
-        for key, value in updated_user.model_dump().items():
-            setattr(db_user, key, value)
+        for key, value in updated_user.model_dump(exclude_unset=True).items():
+            if value is not None:
+                setattr(db_user, key, value)
 
         db.commit()
         db.refresh(db_user)

@@ -41,7 +41,7 @@ class CartService:
             if not product:
                 return ResponseHandler.not_found_error("Product", product_id)
 
-            subtotal = quantity * product.price * (product.discount_percentage / 100)
+            subtotal = quantity * product.price * (1 - product.discount_percentage / 100)
             cart_item = CartItem(product_id=product_id, quantity=quantity, subtotal=subtotal)
             total_amount += subtotal
 
@@ -72,7 +72,7 @@ class CartService:
             if not product:
                 return ResponseHandler.not_found_error("Product", product_id)
 
-            subtotal = quantity * product.price * (product.discount_percentage / 100)
+            subtotal = quantity * product.price * (1 - product.discount_percentage / 100)
 
             cart_item = CartItem(
                 cart_id=cart_id,

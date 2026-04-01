@@ -2,15 +2,88 @@ import { ApiResponse, AuthResponse } from './types'
 
 const API_BASE = 'http://127.0.0.1:8000'
 
+type LogoutCallback = () => void
+let logoutCallback: LogoutCallback | null = null
+
+export function setLogoutCallback(cb: LogoutCallback) {
+  logoutCallback = cb
+}
+
 class ApiClient {
   private token: string | null = null
+  private refreshToken: string | null = null
+  private isRefreshing = false
+  private refreshSubscribers: ((token: string) => void)[] = []
 
   setToken(token: string | null) {
     this.token = token
   }
 
+  setRefreshToken(token: string | null) {
+    this.refreshToken = token
+  }
+
   getToken() {
     return this.token
+  }
+
+  private onRefreshed(token: string) {
+    this.refreshSubscribers.forEach(cb => cb(token))
+    this.refreshSubscribers = []
+  }
+
+  private subscribeToRefresh(callback: (token: string) => void) {
+    this.refreshSubscribers.push(callback)
+  }
+
+  private async refreshAccessToken(): Promise<boolean> {
+    if (this.isRefreshing) {
+      return new Promise((resolve) => {
+        this.subscribeToRefresh(() => {
+          resolve(!!this.token)
+        })
+      })
+    }
+
+    this.isRefreshing = true
+    try {
+      if (!this.refreshToken) {
+        console.error('[API] No refresh token available')
+        logoutCallback?.()
+        return false
+      }
+
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'refresh_token': this.refreshToken,
+        },
+      })
+
+      if (!response.ok) {
+        console.error('[API] Token refresh failed')
+        logoutCallback?.()
+        return false
+      }
+
+      const data = await response.json()
+      const newToken = data.data?.access_token || data.access_token
+
+      if (newToken) {
+        this.setToken(newToken)
+        localStorage.setItem('auth_token', newToken)
+        this.onRefreshed(newToken)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error('[API] Token refresh error:', error)
+      logoutCallback?.()
+      return false
+    } finally {
+      this.isRefreshing = false
+    }
   }
 
   private async request<T = any>(
@@ -30,10 +103,30 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         ...options,
         headers,
       })
+
+      // If we get 401, try to refresh token and retry
+      if (response.status === 401 && this.refreshToken) {
+        console.log('[API] Got 401, attempting token refresh...')
+        const refreshed = await this.refreshAccessToken()
+        
+        if (refreshed && this.token) {
+          console.log('[API] Token refreshed, retrying request...')
+          headers['Authorization'] = `Bearer ${this.token}`
+          response = await fetch(url, {
+            ...options,
+            headers,
+          })
+        } else {
+          return {
+            message: 'Authentication failed',
+            error: 'Token refresh failed',
+          }
+        }
+      }
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -81,6 +174,13 @@ class ApiClient {
 
   async getMe() {
     return this.request('/me/')
+  }
+
+  async updateProfile(data: { address?: string; full_name?: string; email?: string; username?: string }) {
+    return this.request('/me/', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
   }
 
   // Products endpoints
@@ -176,18 +276,23 @@ class ApiClient {
   }
 
   // Orders endpoints
-  async createOrder(items: any[]) {
+  async createOrder(order_items: Array<{ product_id: string | number; quantity: number }>) {
     return this.request('/orders', {
       method: 'POST',
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ order_items }),
     })
   }
 
-  async getOrders() {
-    return this.request('/orders')
+  async getOrders(params?: { page?: number; limit?: number }) {
+    const query = new URLSearchParams()
+    if (params) {
+      if (params.page !== undefined) query.append('page', String(params.page))
+      if (params.limit !== undefined) query.append('limit', String(params.limit))
+    }
+    return this.request(`/orders?${query.toString()}`)
   }
 
-  async getOrder(id: string) {
+  async getOrder(id: string | number) {
     return this.request(`/orders/${id}`)
   }
 }

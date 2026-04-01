@@ -11,11 +11,13 @@ interface ProductCardProps {
   isAuthenticated?: boolean
 }
 
+
 export function ProductCard({ product, onAddToCart, isAuthenticated = false }: ProductCardProps) {
   return (
     <div className="group bg-card rounded-lg overflow-hidden border border-border hover:border-accent transition-all duration-300 hover:shadow-lg">
       {/* Image Container */}
-      <Link href={`/product/${product.slug}`} className="block relative h-64 overflow-hidden bg-muted">
+      
+      <Link href={`/product/${product.id}`} className="block relative h-64 overflow-hidden bg-muted">
         {product.thumbnail ? (
           <Image
             src={product.thumbnail}
