@@ -7,12 +7,20 @@ from app.services.analytics import ProductAnalyticsService
 
 
 class OrderService:
-    # Get All Orders
+    # Get All Orders for Current User
     @staticmethod
     def get_all_orders(token, db: Session, page: int, limit: int):
         user_id = get_current_user(token)
-        orders = db.query(Order).options(selectinload(Order.order_items)).filter(Order.user_id == user_id).offset(
-            (page - 1) * limit).limit(limit).order_by(Order.created_at.desc()).all()
+        orders = db.query(Order).options(selectinload(Order.order_items)).filter(Order.user_id == user_id).order_by(
+            Order.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+        message = f"Page {page} with {limit} orders"
+        return ResponseHandler.success(message, orders)
+
+    # Get All Orders (Admin Only)
+    @staticmethod
+    def get_all_orders_admin(db: Session, page: int, limit: int):
+        orders = db.query(Order).options(selectinload(Order.order_items)).order_by(
+            Order.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
         message = f"Page {page} with {limit} orders"
         return ResponseHandler.success(message, orders)
 
@@ -107,9 +115,16 @@ class OrderService:
     # Update Order Status
     @staticmethod
     def update_order(token, db: Session, order_id: int, updated_order: OrderUpdate):
+        from app.core.security import is_admin
         user_id = get_current_user(token)
+        admin = is_admin(token, db)
         
-        order = db.query(Order).filter(Order.id == order_id, Order.user_id == user_id).first()
+        # Allow update if user owns the order or is admin
+        order = db.query(Order).filter(
+            Order.id == order_id,
+            (Order.user_id == user_id) | (admin) if admin else (Order.user_id == user_id)
+        ).first()
+        
         if not order:
             return ResponseHandler.not_found_error("Order", order_id)
         
@@ -133,9 +148,16 @@ class OrderService:
     # Delete Order
     @staticmethod
     def delete_order(token, db: Session, order_id: int):
+        from app.core.security import is_admin
         user_id = get_current_user(token)
+        admin = is_admin(token, db)
         
-        order = db.query(Order).filter(Order.id == order_id, Order.user_id == user_id).first()
+        # Allow delete if user owns the order or is admin
+        order = db.query(Order).filter(
+            Order.id == order_id,
+            (Order.user_id == user_id) | (admin) if admin else (Order.user_id == user_id)
+        ).first()
+        
         if not order:
             return ResponseHandler.not_found_error("Order", order_id)
         

@@ -8,8 +8,8 @@ from app.services.analytics import ProductAnalyticsService
 class ProductService:
     @staticmethod
     def get_all_products(db: Session, page: int, limit: int, search: str = ""):
-        products = db.query(Product).order_by(Product.id.asc()).filter(
-            Product.title.contains(search)).limit(limit).offset((page - 1) * limit).all()
+        products = db.query(Product).filter(
+            Product.title.contains(search)).order_by(Product.id.asc()).offset((page - 1) * limit).limit(limit).all()
         return {"message": f"Page {page} with {limit} products", "data": products}
 
     @staticmethod

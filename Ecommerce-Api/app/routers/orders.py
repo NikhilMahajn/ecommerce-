@@ -5,9 +5,20 @@ from app.db.database import get_db
 from app.services.orders import OrderService
 from sqlalchemy.orm import Session
 from app.schemas.orders import OrderCreate, OrderUpdate, OrderOut, OrderOutDelete, OrdersOutList
+from app.core.security import check_admin_role
 
 router = APIRouter(tags=["Orders"], prefix="/orders")
 auth_scheme = HTTPBearer()
+
+
+# Get All Orders (Admin Only)
+@router.get("/admin/all", status_code=status.HTTP_200_OK, response_model=OrdersOutList, dependencies=[Depends(check_admin_role)])
+def get_all_orders_admin(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+):
+    return OrderService.get_all_orders_admin(db, page, limit)
 
 
 # Get All Orders for Current User

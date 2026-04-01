@@ -8,8 +8,8 @@ from app.core.security import get_password_hash
 class UserService:
     @staticmethod
     def get_all_users(db: Session, page: int, limit: int, search: str = "", role: str = "user"):
-        users = db.query(User).order_by(User.id.asc()).filter(
-            User.username.contains(search), User.role == role).limit(limit).offset((page - 1) * limit).all()
+        users = db.query(User).filter(
+            User.username.contains(search), User.role == role).order_by(User.id.asc()).offset((page - 1) * limit).limit(limit).all()
         return {"message": f"Page {page} with {limit} users", "data": users}
 
     @staticmethod

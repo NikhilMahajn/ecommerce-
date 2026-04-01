@@ -225,8 +225,18 @@ class ApiClient {
   }
 
   // Categories endpoints
-  async getCategories() {
-    return this.request('/categories')
+  async getCategories(params?: { page?: number; limit?: number; search?: string }) {
+    const query = new URLSearchParams()
+    if (params) {
+      if (params.page !== undefined) query.append('page', String(params.page))
+      if (params.limit !== undefined) query.append('limit', String(params.limit))
+      if (params.search !== undefined) query.append('search', String(params.search))
+    }
+    return this.request(`/categories?${query.toString()}`)
+  }
+
+  async getCategory(id: string | number) {
+    return this.request(`/categories/${id}`)
   }
 
   async createCategory(data: any) {
@@ -234,6 +244,83 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  }
+
+  async updateCategory(id: string | number, data: any) {
+    return this.request(`/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteCategory(id: string | number) {
+    return this.request(`/categories/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Users endpoints (admin only)
+  async getUsers(params?: { page?: number; limit?: number; search?: string; role?: string }) {
+    const query = new URLSearchParams()
+    if (params) {
+      if (params.page !== undefined) query.append('page', String(params.page))
+      if (params.limit !== undefined) query.append('limit', String(params.limit))
+      if (params.search !== undefined) query.append('search', String(params.search))
+      if (params.role !== undefined) query.append('role', String(params.role))
+    }
+    return this.request(`/users?${query.toString()}`)
+  }
+
+  async getUser(id: string | number) {
+    return this.request(`/users/${id}`)
+  }
+
+  async updateUser(id: string | number, data: any) {
+    return this.request(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteUser(id: string | number) {
+    return this.request(`/users/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Orders endpoints (admin can get all)
+  async getAllOrders(params?: { page?: number; limit?: number }) {
+    const query = new URLSearchParams()
+    if (params) {
+      if (params.page !== undefined) query.append('page', String(params.page))
+      if (params.limit !== undefined) query.append('limit', String(params.limit))
+    }
+    return this.request(`/orders/admin/all?${query.toString()}`)
+  }
+
+  async updateOrder(id: string | number, data: any) {
+    return this.request(`/orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteOrder(id: string | number) {
+    return this.request(`/orders/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Analytics endpoints
+  async getAnalyticsSummary() {
+    return this.request('/analytics/summary')
+  }
+
+  async getTopProducts(metric: string = 'purchases', limit: number = 10) {
+    const query = new URLSearchParams()
+    query.append('metric', metric)
+    query.append('limit', String(limit))
+    return this.request(`/analytics/top-products?${query.toString()}`)
   }
 
   // Cart endpoints
