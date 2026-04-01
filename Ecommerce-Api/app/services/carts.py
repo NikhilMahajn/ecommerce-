@@ -31,12 +31,21 @@ class CartService:
         cart_dict = cart.model_dump()
 
         cart_items_data = cart_dict.pop("cart_items", [])
-        cart_items = []
-        total_amount = 0
+        
+        # Consolidate duplicate products by product_id
+        products_map = {}
         for item_data in cart_items_data:
             product_id = item_data['product_id']
             quantity = item_data['quantity']
-
+            
+            if product_id in products_map:
+                products_map[product_id] += quantity
+            else:
+                products_map[product_id] = quantity
+        
+        cart_items = []
+        total_amount = 0
+        for product_id, quantity in products_map.items():
             product = db.query(Product).filter(Product.id == product_id).first()
             if not product:
                 return ResponseHandler.not_found_error("Product", product_id)
@@ -61,13 +70,22 @@ class CartService:
         if not cart:
             return ResponseHandler.not_found_error("Cart", cart_id)
 
-        # Delete existing cart_items
-        db.query(CartItem).filter(CartItem.cart_id == cart_id).delete()
-
+        # Consolidate duplicate products by product_id
+        products_map = {}
         for item in updated_cart.cart_items:
             product_id = item.product_id
             quantity = item.quantity
+            
+            if product_id in products_map:
+                products_map[product_id] += quantity
+            else:
+                products_map[product_id] = quantity
 
+        # Delete existing cart_items
+        db.query(CartItem).filter(CartItem.cart_id == cart_id).delete()
+
+        total_amount = 0
+        for product_id, quantity in products_map.items():
             product = db.query(Product).filter(Product.id == product_id).first()
             if not product:
                 return ResponseHandler.not_found_error("Product", product_id)
@@ -81,8 +99,9 @@ class CartService:
                 subtotal=subtotal
             )
             db.add(cart_item)
+            total_amount += subtotal
 
-        cart.total_amount = sum(item.subtotal for item in cart.cart_items)
+        cart.total_amount = total_amount
 
         db.commit()
         db.refresh(cart)

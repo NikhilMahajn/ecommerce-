@@ -71,10 +71,52 @@ export default function CartPage() {
       
       // Load cart
       const cartRes = await apiClient.getCart({ page: 1, limit: 100 })
-      if (cartRes.data && Array.isArray(cartRes.data) && cartRes.data.length > 0) {
-        setCart(cartRes.data[0])
-      } else if (cartRes.data?.cart_items) {
-        setCart(cartRes.data)
+      if (cartRes.data) {
+        let cartToShow = null
+        
+        // Handle pagination wrapping: extract the actual array if it's inside 'data'
+        const cartsArray = cartRes.data.data || (Array.isArray(cartRes.data) ? cartRes.data : [])
+        
+        // Handle array of carts - merge all items into the first cart uniquely by product_id
+        if (Array.isArray(cartsArray) && cartsArray.length > 0) {
+          const firstCart = cartsArray[0]
+          
+          // Use a Map to deduplicate items by product_id
+          const mergedItemsMap = new Map<number, CartItem>()
+          
+          cartsArray.forEach(cart => {
+            if (cart.cart_items && Array.isArray(cart.cart_items)) {
+              cart.cart_items.forEach(item => {
+                if (mergedItemsMap.has(item.product_id)) {
+                  // Product exists, combine quantities and subtotals
+                  const existingItem = mergedItemsMap.get(item.product_id)!
+                  existingItem.quantity += item.quantity
+                  existingItem.subtotal += item.subtotal
+                } else {
+                  // New product, add to map (using spread to avoid mutating original state)
+                  mergedItemsMap.set(item.product_id, { ...item })
+                }
+              })
+            }
+          })
+          
+          // Convert map back to array and recalculate the accurate total amount
+          const allCartItems = Array.from(mergedItemsMap.values())
+          const totalAmount = allCartItems.reduce((sum, item) => sum + item.subtotal, 0)
+          
+          // Create combined cart
+          cartToShow = {
+            ...firstCart,
+            cart_items: allCartItems,
+            total_amount: totalAmount
+          }
+        } 
+        // Handle single cart object fallback
+        else if (cartRes.data?.id && cartRes.data?.cart_items) {
+          cartToShow = cartRes.data
+        }
+        
+        setCart(cartToShow)
       }
     } catch (error) {
       console.error('Error loading data:', error)

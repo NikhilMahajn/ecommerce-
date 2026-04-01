@@ -121,33 +121,37 @@ export default function Home() {
       return
     }
 
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id)
-      let updatedCart: CartItem[]
-      
-      if (existing) {
-        updatedCart = prev.map((item) =>
-          item.productId === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
-      } else {
-        updatedCart = [...prev, { productId: product.id, product, quantity: 1 }]
-      }
+    // 1. Calculate the new cart state locally
+    const existing = cart.find((item) => item.productId === product.id)
+    let updatedCart: CartItem[]
+    
+    if (existing) {
+      updatedCart = cart.map((item) =>
+        item.productId === product.id
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      )
+    } else {
+      updatedCart = [...cart, { productId: product.id, product, quantity: 1 }]
+    }
 
-      // Send to API with validated data
-      const cartItems = formatCartItemsForAPI(updatedCart)
-      console.log('[v0] Sending cart to API:', cartItems)
+    // 2. Update React state immediately for snappy UI
+    setCart(updatedCart)
 
+    // 3. Perform API side effects outside of the state setter
+    const cartItems = formatCartItemsForAPI(updatedCart)
+    console.log('[v0] Sending cart to API:', cartItems)
+
+    if (cartId) {
       apiClient
-        .addToCart(cartItems)
+        .updateCart(cartId, cartItems)
         .then((response) => {
           if (response.error) {
             addToast('Failed to add to cart', 'error')
             console.error('[v0] Add to cart error:', response.error)
+            // Optional: Revert setCart here if API fails
           } else {
-            addToast(`${product.title} added to cart`, 'success')
-            // Reload cart to get updated cartId
+            addToast(`${product.title || 'Item'} added to cart`, 'success')
             loadCart()
           }
         })
@@ -155,110 +159,121 @@ export default function Home() {
           addToast('Failed to add to cart', 'error')
           console.error('[v0] Add to cart error:', error)
         })
-
-      return updatedCart
-    })
+    } else {
+      apiClient
+        .addToCart(cartItems)
+        .then((response) => {
+          if (response.error) {
+            addToast('Failed to add to cart', 'error')
+            console.error('[v0] Add to cart error:', response.error)
+          } else {
+            addToast(`${product.title || 'Item'} added to cart`, 'success')
+            loadCart()
+          }
+        })
+        .catch((error) => {
+          addToast('Failed to add to cart', 'error')
+          console.error('[v0] Add to cart error:', error)
+        })
+    }
   }
 
   const handleRemoveFromCart = (productId: string) => {
-    setCart((prev) => {
-      const updatedCart = prev.filter((item) => item.productId !== productId)
+    // 1. Calculate and set state locally first
+    const updatedCart = cart.filter((item) => item.productId !== productId)
+    setCart(updatedCart)
 
-      // If cart is now empty, delete the entire cart
-      if (updatedCart.length === 0) {
-        if (cartId) {
-          console.log('[v0] Cart is empty, deleting cart with ID:', cartId)
-          apiClient
-            .deleteCart(cartId)
-            .then((response) => {
-              if (response.error) {
-                addToast('Failed to delete cart', 'error')
-                console.error('[v0] Delete cart error:', response.error)
-              } else {
-                addToast('Cart cleared', 'success')
-                setCartId(null)
-              }
-            })
-            .catch((error) => {
+    // 2. Perform API calls
+    if (updatedCart.length === 0) {
+      if (cartId) {
+        console.log('[v0] Cart is empty, deleting cart with ID:', cartId)
+        apiClient
+          .deleteCart(cartId)
+          .then((response) => {
+            if (response.error) {
               addToast('Failed to delete cart', 'error')
-              console.error('[v0] Delete cart error:', error)
-            })
-        }
-      } else {
-        // Cart still has items, update it
-        const cartItems = formatCartItemsForAPI(updatedCart)
-        console.log('[v0] Updating cart after removing item, CartID:', cartId, 'Items:', cartItems)
-        
-        if (cartId) {
-          apiClient
-            .updateCart(cartId, cartItems)
-            .then((response) => {
-              if (response.error) {
-                addToast('Failed to remove from cart', 'error')
-                console.error('[v0] Remove from cart error:', response.error)
-              } else {
-                addToast('Removed from cart', 'success')
-              }
-            })
-            .catch((error) => {
-              addToast('Failed to remove from cart', 'error')
-              console.error('[v0] Remove from cart error:', error)
-            })
-        }
+              console.error('[v0] Delete cart error:', response.error)
+            } else {
+              addToast('Cart cleared', 'success')
+              setCartId(null)
+            }
+          })
+          .catch((error) => {
+            addToast('Failed to delete cart', 'error')
+            console.error('[v0] Delete cart error:', error)
+          })
       }
-
-      return updatedCart
-    })
+    } else {
+      const cartItems = formatCartItemsForAPI(updatedCart)
+      console.log('[v0] Updating cart after removing item, CartID:', cartId, 'Items:', cartItems)
+      
+      if (cartId) {
+        apiClient
+          .updateCart(cartId, cartItems)
+          .then((response) => {
+            if (response.error) {
+              addToast('Failed to remove from cart', 'error')
+              console.error('[v0] Remove from cart error:', response.error)
+            } else {
+              addToast('Removed from cart', 'success')
+            }
+          })
+          .catch((error) => {
+            addToast('Failed to remove from cart', 'error')
+            console.error('[v0] Remove from cart error:', error)
+          })
+      }
+    }
   }
 
   const handleUpdateQuantity = (productId: string, quantity: number) => {
     if (quantity <= 0) {
       handleRemoveFromCart(productId)
-    } else {
-      setCart((prev) => {
-        const updatedCart = prev.map((item) =>
-          item.productId === productId ? { ...item, quantity } : item
-        )
-
-        // Send to API with validated data
-        if (!cartId) {
-          addToast('Loading cart, please try again', 'error')
-          loadCart()
-          return updatedCart
-        }
-
-        const cartItems = formatCartItemsForAPI(updatedCart)
-        console.log('[v0] Updating cart with ID:', cartId, 'Items:', cartItems)
-
-        apiClient
-          .updateCart(cartId, cartItems)
-          .then((response) => {
-            if (response.error) {
-              addToast('Failed to update cart', 'error')
-              console.error('[v0] Update cart error:', response.error)
-              // Reload cart to refresh cartId
-              loadCart()
-            } else {
-              console.log('[v0] Cart updated successfully')
-            }
-          })
-          .catch((error) => {
-            addToast('Failed to update cart', 'error')
-            console.error('[v0] Update cart error:', error)
-            // Reload cart to refresh cartId
-            loadCart()
-          })
-
-        return updatedCart
-      })
+      return
     }
+
+    // 1. Calculate and set new state locally
+    const updatedCart = cart.map((item) =>
+      item.productId === productId ? { ...item, quantity } : item
+    )
+    setCart(updatedCart)
+
+    // 2. Perform API calls
+    if (!cartId) {
+      addToast('Loading cart, please try again', 'error')
+      loadCart()
+      return
+    }
+
+    const cartItems = formatCartItemsForAPI(updatedCart)
+    console.log('[v0] Updating cart with ID:', cartId, 'Items:', cartItems)
+
+    apiClient
+      .updateCart(cartId, cartItems)
+      .then((response) => {
+        if (response.error) {
+          addToast('Failed to update cart', 'error')
+          console.error('[v0] Update cart error:', response.error)
+          loadCart()
+        } else {
+          console.log('[v0] Cart updated successfully')
+        }
+      })
+      .catch((error) => {
+        addToast('Failed to update cart', 'error')
+        console.error('[v0] Update cart error:', error)
+        loadCart()
+      })
   }
 
   const cartTotal = cart.reduce((sum, item) => {
     if (!item.product) return sum
-    return sum + item.product.price * item.quantity
+    // Apply discount percentage to get final price
+    const discountedPrice = item.product.price * (1 - (item.product.discount_percentage || 0) / 100)
+    return sum + discountedPrice * item.quantity
   }, 0)
 
+  // ... (JSX return remains exactly the same as your original code)
   return (
     <main className="min-h-screen bg-background">
       <Navbar cartItemCount={cart.length} onCartClick={() => setShowCart(!showCart)} />
@@ -386,7 +401,7 @@ export default function Home() {
                 {cart.filter((item) => item.product).map((item) => (
                   <div key={item.productId} className="border border-border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-foreground">{item.product?.name || 'Product'}</h3>
+                      <h3 className="font-semibold text-foreground">{item.product?.name || item.product?.title || 'Product'}</h3>
                       <button
                         onClick={() => handleRemoveFromCart(item.productId)}
                         className="text-destructive hover:bg-destructive/10 p-1 rounded"

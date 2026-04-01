@@ -53,6 +53,17 @@ export function ProductCard({ product, onAddToCart, isAuthenticated = false }: P
             {product.title}
           </h3>
           <p className="text-sm text-muted-foreground">{product.category?.name || 'Uncategorized'}</p>
+          
+          {/* Stock Availability */}
+          <div className="mt-2">
+            {product.stock > 0 ? (
+              <p className={`text-xs font-semibold ${product.stock > 5 ? 'text-green-600' : 'text-orange-600'}`}>
+                {product.stock} {product.stock === 1 ? 'item' : 'items'} in stock
+              </p>
+            ) : (
+              <p className="text-xs font-semibold text-destructive">Out of Stock</p>
+            )}
+          </div>
         </div>
 
         {/* Rating */}
