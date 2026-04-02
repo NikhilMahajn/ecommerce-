@@ -51,7 +51,8 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://ecommerce-delta-bice-74.vercel.app/"
+    "https://ecommerce-delta-bice-74.vercel.app/",
+    "https://ecommerce-txu9.onrender.com",
 ]
 
 app.add_middleware(
