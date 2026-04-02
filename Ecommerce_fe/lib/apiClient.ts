@@ -323,6 +323,11 @@ class ApiClient {
     return this.request(`/analytics/top-products?${query.toString()}`)
   }
 
+  // Admin Dashboard endpoints
+  async getDashboardStats() {
+    return this.request('/admin/dashboard')
+  }
+
   // Cart endpoints
   async addToCart(cartItems: Array<{ product_id: string; quantity: number }>) {
     return this.request('/carts', {

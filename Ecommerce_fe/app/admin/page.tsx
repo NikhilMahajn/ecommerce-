@@ -14,7 +14,8 @@ import { Product, Category, User } from '@/lib/types'
 interface Order {
   id: string | number
   user_id?: string | number
-  total: number
+  total?: number
+  total_amount?: number
   status: 'pending' | 'processing' | 'shipped' | 'delivered'
   createdAt?: string
   created_at?: string
@@ -77,12 +78,13 @@ export default function AdminPage() {
   const loadDashboardStats = async () => {
     setStatsLoading(true)
     try {
-      const response = await apiClient.getAnalyticsSummary()
+      const response = await apiClient.getDashboardStats()
       if (response.data) {
         setStats(response.data)
       }
     } catch (error) {
       console.error('Failed to load stats:', error)
+      addToast('Failed to load dashboard statistics', 'error')
     } finally {
       setStatsLoading(false)
     }
@@ -252,7 +254,7 @@ export default function AdminPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 font-semibold border-b-2 transition-colors whitespace-nowrap ${
+              className={`px-4 py-3 font-semibold border-b-2 transition-colors whitespace-nowrap ₹{
                 activeTab === tab.id
                   ? 'border-accent text-accent'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -299,10 +301,10 @@ export default function AdminPage() {
                       <div>
                         <p className="font-semibold text-foreground">Order #{order.id}</p>
                         <p className="text-sm text-muted-foreground">
-                          Total: ${typeof order.total === 'number' ? order.total.toFixed(2) : order.total}
+                          Total: ₹{typeof order.total === 'number' ? order.total.toFixed(2) : order.total}
                         </p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ₹{
                         order.status === 'delivered' ? 'bg-green-100 text-green-800' :
                         order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
                         order.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
@@ -374,7 +376,7 @@ export default function AdminPage() {
                         </td>
                         <td className="px-6 py-4 text-sm text-foreground font-medium">{product.title}</td>
                         <td className="px-6 py-4 text-sm text-muted-foreground truncate max-w-xs">{product.description}</td>
-                        <td className="px-6 py-4 text-sm text-foreground font-semibold">${product.price.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm text-foreground font-semibold">₹{product.price.toFixed(2)}</td>
                         <td className="px-6 py-4 text-sm text-foreground">{product.stock}</td>
                         <td className="px-6 py-4 text-sm text-foreground">
                           <div className="flex items-center gap-1">
@@ -495,13 +497,13 @@ export default function AdminPage() {
                         <td className="px-6 py-4 text-sm text-foreground font-medium">#{order.id}</td>
                         <td className="px-6 py-4 text-sm text-muted-foreground">{order.user_id}</td>
                         <td className="px-6 py-4 text-sm text-foreground font-semibold">
-                          ${typeof order.total === 'number' ? order.total.toFixed(2) : order.total}
+                          ₹{typeof order.total_amount === 'number' ? order.total_amount.toFixed(2) : order.total_amount}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <select
                             value={order.status}
                             onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                            className={`px-3 py-1 rounded text-xs font-semibold border border-border ${
+                            className={`px-3 py-1 rounded text-xs font-semibold border border-border ₹{
                               order.status === 'delivered' ? 'bg-green-100 text-green-800' :
                               order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
                               order.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
@@ -570,7 +572,7 @@ export default function AdminPage() {
                         <td className="px-6 py-4 text-sm text-foreground font-medium">{u.full_name}</td>
                         <td className="px-6 py-4 text-sm text-muted-foreground">{u.email}</td>
                         <td className="px-6 py-4 text-sm">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ₹{
                             u.role === 'admin' 
                               ? 'bg-purple-100 text-purple-800' 
                               : 'bg-blue-100 text-blue-800'
