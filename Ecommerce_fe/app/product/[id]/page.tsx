@@ -121,7 +121,7 @@ export default function ProductDetailPage() {
               <img
                 src={product.thumbnail}
                 alt={product.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain p-4"
               />
             ) : (
               <div className="text-center text-muted-foreground">
@@ -162,7 +162,7 @@ export default function ProductDetailPage() {
               {/* Price */}
               <div className="mb-6">
                 <p className="text-5xl font-heading font-bold text-accent">
-                  ${product.price.toFixed(2)}
+                  ₹{product.price.toFixed(2)}
                 </p>
               </div>
 
@@ -259,10 +259,10 @@ export default function ProductDetailPage() {
                   <div key={item.productId} className="border border-border rounded-lg p-4">
                     <h3 className="font-semibold text-foreground mb-2">{item.product.title}</h3>
                     <p className="text-sm text-muted-foreground mb-3">
-                      ${item.product.price.toFixed(2)} x {item.quantity}
+                      ₹{item.product.price.toFixed(2)} x {item.quantity}
                     </p>
                     <div className="text-right font-semibold text-foreground">
-                      ${(item.product.price * item.quantity).toFixed(2)}
+                      ₹{(item.product.price * item.quantity).toFixed(2)}
                     </div>
                   </div>
                 ))}
@@ -272,7 +272,7 @@ export default function ProductDetailPage() {
                 <div className="flex justify-between items-center mb-4">
                   <span className="font-heading text-lg font-bold text-foreground">Total:</span>
                   <span className="font-heading text-2xl font-bold text-accent">
-                    ${cartTotal.toFixed(2)}
+                    ₹{cartTotal.toFixed(2)}
                   </span>
                 </div>
                 <button className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors">

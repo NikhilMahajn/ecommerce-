@@ -17,13 +17,13 @@ export function ProductCard({ product, onAddToCart, isAuthenticated = false }: P
     <div className="group bg-card rounded-lg overflow-hidden border border-border hover:border-accent transition-all duration-300 hover:shadow-lg">
       {/* Image Container */}
       
-      <Link href={`/product/${product.id}`} className="block relative h-64 overflow-hidden bg-muted">
+      <Link href={`/product/${product.id}`} className="block relative h-64 overflow-hidden bg-muted flex items-center justify-center">
         {product.thumbnail ? (
           <Image
             src={product.thumbnail}
             alt={product.title}
             fill
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 p-2"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -85,7 +85,7 @@ export function ProductCard({ product, onAddToCart, isAuthenticated = false }: P
         {/* Price and Button */}
         <div className="flex items-end justify-between gap-2">
           <div className="text-2xl font-heading font-bold text-accent">
-            ${product.price.toFixed(2)}
+            ₹{product.price.toFixed(2)}
           </div>
           <button
             onClick={() => onAddToCart?.(product)}

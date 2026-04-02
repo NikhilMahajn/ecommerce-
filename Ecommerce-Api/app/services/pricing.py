@@ -25,28 +25,28 @@ class PricingService:
             return 0.0
 
         prompt = f"""
-You are a pricing optimization model for an e-commerce platform.
+        You are a pricing optimization model for an e-commerce platform.
 
-Analyze the following product metrics and suggest a price adjustment:
+        Analyze the following product metrics and suggest a price adjustment:
 
-Product: {product.title}
-Base Price: {product.price}
-Stock Available: {product.stock}
-Views: {analytics.views}
-Cart Additions: {analytics.cart_adds}
-Purchases: {analytics.purchases}
-Current Discount: {product.discount_percentage}%
+        Product: {product.title}
+        Base Price: {product.price}
+        Stock Available: {product.stock}
+        Views: {analytics.views}
+        Cart Additions: {analytics.cart_adds}
+        Purchases: {analytics.purchases}
+        Current Discount: {product.discount_percentage}%
 
-Based on demand signals (views, cart adds, purchases) and inventory level, 
-suggest a price adjustment percentage between -0.2 to 0.2.
+        Based on demand signals (views, cart adds, purchases) and inventory level, 
+        suggest a price adjustment percentage between -0.2 to 0.2.
 
-Guidelines:
-- High demand (high cart adds + purchases) with low stock → increase price (positive adjustment)
-- Low demand (low views + cart adds) with high stock → decrease price (negative adjustment)
-- Balance between demand and stock levels
-- Consider conversion rate (purchases / cart adds)
+        Guidelines:
+        - High demand (high cart adds + purchases) with low stock → increase price (positive adjustment)
+        - Low demand (low views + cart adds) with high stock → decrease price (negative adjustment)
+        - Balance between demand and stock levels
+        - Consider conversion rate (purchases / cart adds)
 
-Only return a float number like 0.1 or -0.05. No explanation needed.
+        Only return a float number like 0.1 or -0.05. No explanation needed.
         """
 
         try:

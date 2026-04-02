@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: ecommerce-api
+    runtime: docker
+    region: oregon
+    plan: free
+
+    # Health check configuration
+    healthCheckPath: /docs
+
+    # Environment variables - these need to be set in Render dashboard
+    envVars:
+      - key: DATABASE_URL
+        scope: runtime
+      - key: JWT_SECRET
+        scope: runtime
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: CLOUDINARY_CLOUD_NAME
+        scope: runtime
+      - key: CLOUDINARY_API_KEY
+        scope: runtime
+      - key: CLOUDINARY_API_SECRET
+        scope: runtime
+
+    # Build settings
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+    # Auto-deploy from GitHub
+    repo: https://github.com/your-username/your-repo-name
+    branch: main
+
+    # Disk storage (optional - for file uploads if needed)
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

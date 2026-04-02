@@ -412,7 +412,7 @@ export default function Home() {
                       </button>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">
-                      ${item.product?.price?.toFixed(2) || '0.00'} each
+                      ₹{item.product?.price?.toFixed(2) || '0.00'} each
                     </p>
                     <div className="flex items-center gap-2">
                       <button
@@ -435,7 +435,7 @@ export default function Home() {
                         +
                       </button>
                       <span className="ml-auto font-semibold text-foreground">
-                        ${(item.product?.price && typeof item.product.price === 'number' ? item.product.price * item.quantity : 0).toFixed(2)}
+                        ₹{(item.product?.price && typeof item.product.price === 'number' ? item.product.price * item.quantity : 0).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -446,7 +446,7 @@ export default function Home() {
                 <div className="flex justify-between items-center mb-4">
                   <span className="font-heading text-lg font-bold text-foreground">Total:</span>
                   <span className="font-heading text-2xl font-bold text-accent">
-                    ${cartTotal.toFixed(2)}
+                    ₹{cartTotal.toFixed(2)}
                   </span>
                 </div>
                 <button className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors">

@@ -217,7 +217,7 @@ export function AddProductDialog({ isOpen, onClose, onSuccess }: AddProductDialo
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label htmlFor="price" className="block text-sm font-semibold text-foreground mb-2">
-                Price ($) *
+                Price (₹) *
               </label>
               <input
                 id="price"

@@ -277,7 +277,7 @@ export default function AdminPage() {
                     { label: 'Total Products', value: stats.total_products || 0 },
                     { label: 'Total Orders', value: stats.total_orders || 0 },
                     { label: 'Total Users', value: stats.total_users || 0 },
-                    { label: 'Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}` },
+                    { label: 'Revenue', value: `₹${(stats.total_revenue || 0).toFixed(2)}` },
                   ].map((stat, i) => (
                     <div key={i} className="bg-card border border-border rounded-lg p-6">
                       <p className="text-muted-foreground text-sm mb-2">{stat.label}</p>
@@ -360,12 +360,12 @@ export default function AdminPage() {
                       <tr key={product.id} className="border-b border-border hover:bg-muted/50 transition-colors">
                         <td className="px-6 py-4 text-sm text-foreground">
                           {product.thumbnail ? (
-                            <div className="relative w-12 h-12 rounded overflow-hidden">
+                            <div className="relative w-12 h-12 rounded overflow-hidden flex items-center justify-center bg-muted">
                               <Image
                                 src={product.thumbnail}
                                 alt={product.title}
                                 fill
-                                className="object-cover"
+                                className="object-contain p-1"
                               />
                             </div>
                           ) : (
@@ -437,12 +437,12 @@ export default function AdminPage() {
                 {categories.map((category) => (
                   <div key={category.id} className="bg-card border border-border rounded-lg p-6">
                     {category.image && (
-                      <div className="relative w-full h-32 rounded mb-4 overflow-hidden">
+                      <div className="relative w-full h-32 rounded mb-4 overflow-hidden flex items-center justify-center bg-muted">
                         <Image
                           src={category.image}
                           alt={category.name}
                           fill
-                          className="object-cover"
+                          className="object-contain p-2"
                         />
                       </div>
                     )}
