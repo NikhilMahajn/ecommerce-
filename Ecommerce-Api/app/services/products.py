@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_
+
 from app.models.models import Product, Category
 from app.schemas.products import ProductCreate, ProductUpdate
 from app.utils.responses import ResponseHandler
@@ -61,3 +63,71 @@ class ProductService:
         db.delete(db_product)
         db.commit()
         return ResponseHandler.delete_success(db_product.title, db_product.id, db_product)
+
+    #Agent Methods
+    @staticmethod
+    def search_products(db, query="", category=None, max_price=None, limit=10):
+        q = db.query(Product)
+
+        if query:
+            words = query.strip().split()
+
+            for word in words:
+                like = f"%{word}%"
+                q = q.filter(or_(
+                    Product.title.ilike(like),
+                    Product.description.ilike(like),
+                    Product.brand.ilike(like),
+                ))
+
+        if category:
+            q = q.join(Category).filter(Category.name.ilike(f"%{category}%"))
+
+        if max_price is not None:
+            q = q.filter(Product.price <= max_price)
+
+        results =  q.order_by(Product.id.asc()).limit(limit).all()
+
+        return {
+            "count": len(results),
+            "products": [
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "price": p.price,
+                    "category_id": p.category_id,
+                }
+                for p in results
+            ],
+        }
+
+    @staticmethod
+    def get_product_tool(db: Session, product_id: int):
+        # Deliberately NOT calling ProductService.get_product here — that method
+        # tracks analytics views, which we don't want firing on every agent lookup.
+
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return {"error": "not_found", "product_id": product_id}
+
+        return {
+            "id": product.id,
+            "title": product.title,
+            "price": product.price,
+            "category_id": product.category_id,
+        }
+
+    @staticmethod
+    def check_inventory(db: Session, product_id: int, quantity: int):
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return {"error": "not_found", "product_id": product_id}
+
+        in_stock = product.stock  
+        return {
+            "product_id": product_id,
+            "requested_quantity": quantity,
+            "available": in_stock >= quantity,
+            "in_stock": in_stock,
+        }
+
