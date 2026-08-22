@@ -1,6 +1,7 @@
+import type { ChatResponse } from './agentTypes'
 import { ApiResponse, AuthResponse } from './types'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL
+const API_BASE = process.env.NEXT_PUBLIC_LOCAL_URL
 
 type LogoutCallback = () => void
 let logoutCallback: LogoutCallback | null = null
@@ -56,7 +57,7 @@ class ApiClient {
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: {
-          'refresh_token': this.refreshToken,
+          'refresh-token': this.refreshToken,
         },
       })
 
@@ -386,6 +387,17 @@ class ApiClient {
 
   async getOrder(id: string | number) {
     return this.request(`/orders/${id}`)
+  }
+
+  //Agent chat Endpoints
+
+  async sendAgentMessage(message: string, sessionId: string): Promise<ChatResponse> {
+    const response = await this.request<ChatResponse>('/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, session_id: sessionId }),
+    })
+
+    return response as Partial<ChatResponse> & { data?: Partial<ChatResponse> }
   }
 }
 
