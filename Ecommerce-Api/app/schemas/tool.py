@@ -42,4 +42,41 @@ TOOL_SCHEMAS = [
             },
         },
     },
+	{
+        "type": "function",
+        "function": {
+            "name": "calculate_cart",
+            "description": (
+                "Computes the authoritative subtotal and total for a proposed set of "
+                "cart items. This is the ONLY source of truth for any total or "
+                "subtotal — you must call this before stating any total to the user, "
+                "and you must display exactly the total_amount this returns. Never "
+                "compute, estimate, or restate a total yourself; if you do the math "
+                "in your head it WILL be wrong and the user will see the correct "
+                "number from this tool anyway, so there's no reason to guess. Also "
+                "reports validation errors (invalid product_id, insufficient stock, "
+                "non-positive quantity) for any line that couldn't be priced."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "description": "The proposed cart lines.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "product_id": {"type": "integer"},
+                                "quantity": {"type": "integer", "description": "Must be a positive integer."},
+                            },
+                            "required": ["product_id", "quantity"],
+                        },
+                    }
+                },
+                "required": ["items"],
+            },
+        },
+    },
+ 
+
 ]

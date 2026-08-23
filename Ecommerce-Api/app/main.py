@@ -1,4 +1,4 @@
-from app.routers import products, categories, carts, users, auth, accounts, orders, analytics, pricing, admin,agent
+from app.routers import products, categories, carts, users, auth, accounts, orders, analytics, pricing, admin,agent,chatHistory
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.workers.pricing_worker import start_pricing_worker, stop_pricing_worker
@@ -73,6 +73,7 @@ app.include_router(analytics.router)
 app.include_router(pricing.router)
 app.include_router(admin.router)
 app.include_router(agent.router)
+app.include_router(chatHistory.router)
 
 
 # Startup event - start background workers

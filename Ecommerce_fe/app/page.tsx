@@ -500,7 +500,7 @@ export default function Home() {
               </svg>
             </button>
           </div>
-          <ChatPanel />
+          <ChatPanel onCartApproved={loadCart} isAuthenticated={authLoading ? null : isAuthenticated} />
         </div>
       </div>
     </main>

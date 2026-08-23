@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.schemas.agent import ChatRequest
 from app.schemas.tool import TOOL_SCHEMAS
 from app.services.products import ProductService
+from app.services.carts import CartService
 from app.services.ChatHistory import ChatHistoryService
 from app.core.security import get_current_user
 
@@ -28,6 +29,43 @@ _RECOVERABLE_TOOL_CODES = {"output_parse_failed", "tool_use_failed"}
 # How many times we push the model back toward calling a tool before giving
 # up and declining — we never forward an answer that skipped tool calls.
 MAX_TOOL_CALL_RETRIES = 2
+
+# No system prompt existed before — the model had zero instruction to
+# justify its picks, ground them in tool data, or stay inside our catalog.
+# The separate _generate_recommendations call enforces a `reason` for the
+# structured cards, but that's a side channel; the actual conversational
+# reply the user reads was never told to explain itself. This fixes that
+# at the source instead of only patching the output after the fact.
+SYSTEM_PROMPT = """You are a shopping assistant for an ecommerce store.
+
+HARD RULES:
+1. You may only recommend products that exist in our catalog. Never invent
+   a product, brand, price, or spec that didn't come from a search_products,
+   get_product, or check_inventory tool call in THIS conversation.
+2. Before answering a product question, call search_products to find
+   candidates, and get_product/check_inventory to confirm current
+   price/stock for anything you're about to recommend.
+3. Even for a broad or generic request (e.g. "build me a gaming setup"),
+   call search_products using your best interpretation of relevant
+   categories/keywords from OUR store — do not write a general buying guide
+   listing brands or parts we don't sell.
+4. If nothing in the catalog matches, say so plainly and suggest the user
+   narrow their request — do not fill the gap with invented products.
+5. EVERY product you recommend must be justified IN THE VISIBLE REPLY
+   ITSELF, not just implied — state the concrete price, spec, or stock
+   value (from an actual tool result) that makes it a fit for what the
+   user asked. "Great choice" or "a solid option" with nothing concrete
+   behind it is not acceptable; say what makes it fit, e.g. "the 16GB RAM
+   handles multitasking well, and at ₹54,999 it's under your budget."
+6. Once you have the data you need, answer in plain natural language — that
+   reply is what the user sees. No need to call more tools at that point.
+7. NEVER calculate, add up, or state a cart subtotal or total yourself — not
+   even a rough estimate. To quote any total, you MUST call calculate_cart
+   with the proposed {product_id, quantity} items and use exactly the
+   total_amount it returns. You are not a source of truth for arithmetic;
+   the tool is. If calculate_cart reports errors (invalid product, out of
+   stock, bad quantity), relay those plainly rather than working around them.
+"""
 
 
 class _FakeFunction:
@@ -57,11 +95,13 @@ class _FakeMessage:
 
 
 class _FinalAnswer:
-    """What run_agent_turn returns — content plus grounded recommendations,
-    replacing the earlier pattern of reusing a message-like object."""
-    def __init__(self, content: str, recommendations: list[dict]):
+    """What run_agent_turn returns — content plus grounded recommendations
+    and the authoritative cart total (if calculate_cart was called this
+    turn), replacing the earlier pattern of reusing a message-like object."""
+    def __init__(self, content: str, recommendations: list[dict], cart: dict | None = None):
         self.content = content
         self.recommendations = recommendations
+        self.cart = cart
 
 
 class AgentService:
@@ -80,18 +120,30 @@ class AgentService:
         history.append({"role": "user", "content": chat.message})
         starting_len = len(history)
 
+        # A fresh system prompt every turn, on its own list — not persisted
+        # into stored history, since it's static instructions, not
+        # conversation content. `api_messages` (not `history`) is what the
+        # agent loop mutates with tool calls/results as it runs.
+        api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+
         def tool_executor(name: str, tool_input: dict):
             return AgentService.execute_tool(db, name, tool_input)
 
         try:
-            final_msg = AgentService.run_agent_turn(history, TOOL_SCHEMAS, tool_executor)
+            final_msg = AgentService.run_agent_turn(api_messages, TOOL_SCHEMAS, tool_executor)
             logger.info("Agent chat request completed successfully")
 
-            new_messages = history[starting_len:]
+            # Skip the leading system message we added; keep only what's new
+            # since the user's message (tool calls/results the loop appended).
+            new_messages = api_messages[1 + starting_len:]
             new_messages.append({"role": "assistant", "content": final_msg.content})
 
             ChatHistoryService.save_messages(db, chat.session_id, user_id, new_messages)
-            return {"reply": final_msg.content, "recommendations": final_msg.recommendations}
+            return {
+                "reply": final_msg.content,
+                "recommendations": final_msg.recommendations,
+                "cart": final_msg.cart,
+            }
         except Exception:
             logger.exception("Agent chat request failed")
             raise
@@ -118,25 +170,31 @@ class AgentService:
 
         try:
             history = ChatHistoryService.load_history(db, chat.session_id, user_id)
-            history.append({"role": "user", "content": chat.message})
-            starting_len = len(history)
+            user_message = {"role": "user", "content": chat.message}
+
+            # Same reasoning as agent_chat: fresh system prompt per turn, on
+            # its own list, never persisted into stored history.
+            api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history + [user_message]
+            turn_start = len(api_messages)
 
             def tool_executor(name: str, tool_input: dict):
                 return AgentService.execute_tool(db, name, tool_input)
 
             final_content = None
-            for event in AgentService.run_agent_turn_stream(history, TOOL_SCHEMAS, tool_executor):
+            for event in AgentService.run_agent_turn_stream(api_messages, TOOL_SCHEMAS, tool_executor):
                 if event["type"] == "final":
                     final_content = event["reply"]
                 yield json.dumps(event) + "\n"
 
-            new_messages = history[starting_len:]
-            new_messages.append({"role": "assistant", "content": final_content or ""})
+            new_messages = [user_message] + api_messages[turn_start:] + [
+                {"role": "assistant", "content": final_content or ""}
+            ]
             ChatHistoryService.save_messages(db, chat.session_id, user_id, new_messages)
         except Exception as e:
             logger.exception("Agent chat (stream) request failed")
             yield json.dumps({"type": "error", "error": str(e)}) + "\n"
 
+            
     @staticmethod
     def _clean_tool_name(raw_name: str) -> str:
         """
@@ -229,15 +287,24 @@ class AgentService:
             if event["type"] == "final":
                 final_event = event
         if final_event is None:
-            return _FinalAnswer("Something went wrong producing a response.", [])
-        return _FinalAnswer(final_event["reply"], final_event.get("recommendations", []))
+            return _FinalAnswer("Something went wrong producing a response.", [], None)
+        return _FinalAnswer(
+            final_event["reply"],
+            final_event.get("recommendations", []),
+            final_event.get("cart"),
+        )
 
     @staticmethod
     def run_agent_turn_stream(messages: list[dict], tools: list[dict], tool_executor):
         """Streaming version — yields tool_call/tool_result events live, then a final event."""
         for event in AgentService._agent_loop(messages, tools, tool_executor):
             if event["type"] == "final":
-                yield {"type": "final", "reply": event["reply"], "recommendations": event.get("recommendations", [])}
+                yield {
+                    "type": "final",
+                    "reply": event["reply"],
+                    "recommendations": event.get("recommendations", []),
+                    "cart": event.get("cart"),
+                }
             else:
                 yield event
 
@@ -306,7 +373,10 @@ class AgentService:
     @staticmethod
     def _dispatch_tool_call(tool_call, tool_executor, messages):
         """Runs one tool call (real or recovered), yields tool_call/tool_result
-        events, and appends the result to `messages`."""
+        events, appends the result to `messages`, and returns (name, result)
+        via the generator's return value (captured with `yield from` by the
+        caller) — used by _agent_loop to pull out the authoritative
+        calculate_cart result without re-parsing anything from `messages`."""
         name = AgentService._clean_tool_name(tool_call.function.name)
         logger.info("Executing agent tool '%s'", name)
 
@@ -318,7 +388,7 @@ class AgentService:
             result = {"error": f"could not parse arguments: {e}"}
             yield {"type": "tool_result", "tool_call_id": tool_call.id, "name": name, "result": result}
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(result)})
-            return
+            return name, result
 
         yield {"type": "tool_call", "tool_call_id": tool_call.id, "name": name, "args": args}
 
@@ -332,6 +402,7 @@ class AgentService:
 
         yield {"type": "tool_result", "tool_call_id": tool_call.id, "name": name, "result": result}
         messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(result)})
+        return name, result
 
     @staticmethod
     def _agent_loop(messages: list[dict], tools: list[dict], tool_executor):
@@ -345,7 +416,7 @@ class AgentService:
         """
         logger.info("Starting agent turn with %s messages and %s available tools", len(messages), len(tools))
 
-        msg = AgentService._safe_completion(messages, tools, tool_choice="required")
+        msg = AgentService._safe_completion(messages, tools, tool_choice="auto")
         logger.info("Initial model response received; tool_calls=%s", bool(msg.tool_calls))
 
         # With tool_choice="required", the only way msg.tool_calls is falsy is
@@ -387,10 +458,12 @@ class AgentService:
                 "msg": None,
                 "is_fake": True,
                 "recommendations": [],  # no tool was ever called — nothing grounded to extract
+                "cart": None,
             }
             return
 
         iterations = 0
+        last_cart_result = None
         while msg.tool_calls and iterations < settings.MAX_TOOL_ITERATIONS:
             iterations += 1
             logger.info("Processing tool-call iteration %s", iterations)
@@ -403,7 +476,16 @@ class AgentService:
                 messages.append({"role": "assistant", "content": msg.content or ""})
 
             for tool_call in msg.tool_calls:
-                yield from AgentService._dispatch_tool_call(tool_call, tool_executor, messages)
+                dispatch_result = yield from AgentService._dispatch_tool_call(tool_call, tool_executor, messages)
+                if dispatch_result:
+                    tool_name, tool_result = dispatch_result
+                    # This is the trust boundary: the authoritative cart total
+                    # is captured directly from the tool's own return value —
+                    # never parsed out of the model's later prose. Whatever
+                    # the model says in its reply, THIS is what gets shown as
+                    # the real total.
+                    if tool_name == "calculate_cart" and isinstance(tool_result, dict) and not tool_result.get("error"):
+                        last_cart_result = tool_result
 
             msg = AgentService._safe_completion(messages, tools, tool_choice="auto")
             logger.info("Follow-up model response received; tool_calls=%s", bool(msg.tool_calls))
@@ -446,7 +528,10 @@ class AgentService:
                         "recommendation — could you ask again?"
                     )
                     recommendations = AgentService._generate_recommendations(messages)
-                    yield {"type": "final", "reply": reply, "recommendations": recommendations, "msg": None, "is_fake": True}
+                    yield {
+                        "type": "final", "reply": reply, "recommendations": recommendations,
+                        "cart": last_cart_result, "msg": None, "is_fake": True,
+                    }
                     return
 
         if msg.tool_calls:
@@ -466,6 +551,7 @@ class AgentService:
                 "msg": None,
                 "is_fake": True,
                 "recommendations": AgentService._generate_recommendations(messages),
+                "cart": last_cart_result,
             }
             return
 
@@ -480,11 +566,15 @@ class AgentService:
                 "msg": None,
                 "is_fake": True,
                 "recommendations": [],
+                "cart": last_cart_result,
             }
             return
 
         recommendations = AgentService._generate_recommendations(messages)
-        yield {"type": "final", "reply": msg.content, "recommendations": recommendations, "msg": msg, "is_fake": False}
+        yield {
+            "type": "final", "reply": msg.content, "recommendations": recommendations,
+            "cart": last_cart_result, "msg": msg, "is_fake": False,
+        }
 
     @staticmethod
     def execute_tool(db: Session, name: str, tool_input: dict):
@@ -496,6 +586,12 @@ class AgentService:
             return ProductService.get_product_tool(db, **tool_input)
         if name == "check_inventory":
             return ProductService.check_inventory(db, **tool_input)
+        if name == "calculate_cart":
+            # The only place a total is computed. tool_input's "items" here
+            # is exactly what the model proposed (product_id/quantity pairs)
+            # — CartService looks up real prices/stock itself; nothing about
+            # price or total is trusted from tool_input.
+            return CartService.calculate_cart(db, tool_input.get("items", []))
 
         logger.warning("Unknown tool requested: %s", name)
         return {"error": f"unknown tool {name}"}

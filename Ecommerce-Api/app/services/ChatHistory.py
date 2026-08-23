@@ -5,7 +5,7 @@ from app.models.models import ChatMessage
 class ChatHistoryService:
 
     @staticmethod
-    def load_history(db: Session, session_id: str, user_id: int) -> list[dict]:
+    def load_history(db: Session, session_id: int, user_id: int) -> list[dict]:
         rows = (
             db.query(ChatMessage)
             .filter(ChatMessage.session_id == session_id, ChatMessage.user_id == user_id)

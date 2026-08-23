@@ -400,6 +400,16 @@ class ApiClient {
     return response as Partial<ChatResponse> & { data?: Partial<ChatResponse> }
   }
 
+  // Loads persisted history for a session. Like sendAgentMessage, the agent
+  // routes return their payload directly rather than ResponseHandler-wrapped
+  // — the `data` fallback below is defensive in case that ever changes.
+  async getChatHistory(sessionId: string): Promise<{ messages: any[] } & Partial<ApiResponse<any>>> {
+    const response = await this.request<{ messages: any[] }>(
+      `/agent/chat/history?session_id=${encodeURIComponent(sessionId)}`
+    )
+    return response as any
+  }
+
   // Streaming variant of sendAgentMessage — hits /agent/chat/stream and yields
   // one parsed event per NDJSON line as the backend produces them (tool_call,
   // tool_result, final, error). Can't go through `this.request` since that

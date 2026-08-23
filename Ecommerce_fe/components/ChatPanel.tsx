@@ -3,35 +3,126 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatItem } from "@/lib/agentTypes";
+import type { ChatItem, CartSummary } from "@/lib/agentTypes";
 import { describeToolCall, describeToolResult } from "@/lib/toolDisplay";
+import { historyToChatItems } from "@/lib/chatHistory";
 
 import { apiClient } from "@/lib/apiClient";
 
+const SESSION_STORAGE_KEY = "chat_session_id";
+
 function getOrCreateSessionId() {
-	let sessionId = localStorage.getItem("chat_session_id");
+	let sessionId = localStorage.getItem(SESSION_STORAGE_KEY);
 	if (!sessionId) {
 		sessionId = crypto.randomUUID();
-		localStorage.setItem("chat_session_id", sessionId);
+		localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
 	}
 	return sessionId;
 }
 
-export default function ChatPanel() {
+// ChatPanel takes:
+//  - onCartApproved: lets the hosting page (which owns "real" cart state —
+//    see Home's loadCart()) refresh the cart badge after an approve.
+//  - isAuthenticated: drives the session lifecycle below. Pass this from
+//    wherever your app already tracks auth (e.g. useAuth() in Home) so
+//    ChatPanel knows when to load/clear history instead of guessing from
+//    localStorage alone. Three states matter here, not two:
+//      true      -> logged in: load/reload the session and its history.
+//      false     -> definitely logged out: clear the session.
+//      null      -> auth status not resolved yet (e.g. an initial token
+//                   check still in flight on page load) — wait, don't guess.
+//                   Pass null (not false!) from the parent during that
+//                   window, or ChatPanel will wipe a perfectly good session
+//                   because it looks indistinguishable from a real logout.
+//      undefined -> prop omitted entirely: falls back to the old
+//                   "just load once on mount" behavior, no logout-clearing.
+export default function ChatPanel({
+	onCartApproved,
+	isAuthenticated,
+}: {
+	onCartApproved?: () => void;
+	isAuthenticated?: boolean | null;
+}) {
 	const [items, setItems] = useState<ChatItem[]>([]);
 	const [input, setInput] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [currentAction, setCurrentAction] = useState<string | null>(null);
+	const [loadingHistory, setLoadingHistory] = useState(true);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
-	// localStorage doesn't exist during SSR — reading it in useRef's
-	// initializer runs at render time, which can happen server-side and
-	// throws/returns undefined depending on the environment. Assigning it in
-	// useEffect guarantees this only ever runs client-side, after mount.
+	// localStorage doesn't exist during SSR — only ever touched inside
+	// useEffect/handlers, never at render time.
 	const sessionIdRef = useRef<string | null>(null);
+
+	// Tracks the previous isAuthenticated value so the effect below can tell
+	// "just logged in" (false/undefined -> true) apart from "still logged
+	// in" (true -> true, e.g. an unrelated re-render) — without this, every
+	// re-render while logged in would re-fetch history from scratch.
+	const prevAuthRef = useRef<boolean | undefined>(undefined);
+
+	async function loadSessionAndHistory() {
+		setLoadingHistory(true);
+		const sessionId = getOrCreateSessionId();
+		sessionIdRef.current = sessionId;
+
+		try {
+			const res = await apiClient.getChatHistory(sessionId);
+			// Defensive: the agent routes return their payload directly rather
+			// than ResponseHandler-wrapped, but fall back to `.data` in case
+			// that ever changes.
+			const rows = (res as any)?.messages ?? (res as any)?.data?.messages ?? [];
+			setItems(rows.length > 0 ? historyToChatItems(rows) : []);
+		} catch (err) {
+			console.error("[Chat] Failed to load history:", err);
+			// Fail silently in the UI — worst case the user starts with an
+			// empty panel instead of their saved conversation.
+			setItems([]);
+		} finally {
+			setLoadingHistory(false);
+			queueMicrotask(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
+		}
+	}
+
 	useEffect(() => {
-		sessionIdRef.current = getOrCreateSessionId();
-	}, []);
+		// Auth status genuinely not resolved yet (parent explicitly passed
+		// null, e.g. while an initial token check is still in flight). Do
+		// NOT treat this like a logout — that was the actual bug: on every
+		// page reload, isAuthenticated briefly reads `false` while auth is
+		// still loading, which used to get misread as "user logged out" and
+		// wiped the session id a moment before the real `true` arrived,
+		// producing a fresh empty session on every single reload. Waiting
+		// here for a real true/false fixes that.
+		if (isAuthenticated === null) {
+			return;
+		}
+
+		// Logged out (explicitly false — a real, resolved logout, not the
+		// "still checking" state above): drop this browser's session id and
+		// any in-memory chat. This is the actual fix for the ORIGINAL session
+		// problem — without it, a second person logging into the same
+		// browser would load (and could keep adding to) the first person's
+		// conversation, since the session id lived in plain localStorage
+		// with no relationship to who's authenticated.
+		if (isAuthenticated === false) {
+			localStorage.removeItem(SESSION_STORAGE_KEY);
+			sessionIdRef.current = null;
+			setItems([]);
+			setLoadingHistory(false);
+			prevAuthRef.current = false;
+			return;
+		}
+
+		// isAuthenticated is true, or undefined (prop omitted entirely —
+		// caller doesn't track auth for this, fall back to "just try once").
+		// Load on the transition INTO being authenticated. This is what
+		// makes login-after-mount work: previously this only ran once in a
+		// mount-only effect, so logging in after ChatPanel was already on
+		// screen never triggered a (re)load.
+		if (prevAuthRef.current !== true) {
+			loadSessionAndHistory();
+		}
+		prevAuthRef.current = true;
+	}, [isAuthenticated]);
 
 	function pushItem(item: ChatItem) {
 		setItems((prev) => [...prev, item]);
@@ -48,13 +139,54 @@ export default function ChatPanel() {
 		});
 	}
 
+	function updateAssistantItem(id: string, patch: Partial<Extract<ChatItem, { kind: "assistant" }>>) {
+		setItems((prev) => {
+			const idx = prev.findIndex((it) => it.kind === "assistant" && it.id === id);
+			if (idx === -1) return prev;
+			const copy = [...prev];
+			copy[idx] = { ...copy[idx], ...patch } as ChatItem;
+			return copy;
+		});
+	}
+
+	// The ONLY place a cart write happens. This calls your existing
+	// apiClient.addToCart — the same REST path the manual "Add to Cart"
+	// buttons on product cards already use — with just {product_id,
+	// quantity} pairs taken from the backend-verified `cart.line_items`.
+	// The agent's calculate_cart tool never writes anything; it only
+	// produces the preview the user is approving here. create_cart on the
+	// backend recomputes price/discount itself, so even this approved total
+	// isn't blindly trusted twice over.
+	async function approveCart(assistantId: string, cart: CartSummary) {
+		updateAssistantItem(assistantId, { cartStatus: "approving" });
+		try {
+			const cartItems = cart.line_items.map((li) => ({
+				product_id: String(li.product_id),
+				quantity: li.quantity,
+			}));
+			const response = await apiClient.addToCart(cartItems);
+			if (response?.error) {
+				throw new Error(response.error);
+			}
+			updateAssistantItem(assistantId, { cartStatus: "approved" });
+			onCartApproved?.();
+		} catch (err: any) {
+			updateAssistantItem(assistantId, { cartStatus: "error" });
+			pushItem({ kind: "error", text: err.message ?? "Couldn't add that to your cart — please try again." });
+		}
+	}
+
+	function rejectCart(assistantId: string) {
+		updateAssistantItem(assistantId, { cartStatus: "rejected" });
+	}
+
 	async function sendMessage() {
 		const text = input.trim();
 		if (!text || busy) return;
 
-		// Guards the edge case where someone sends before the mount effect has
-		// run (fast typing + Enter on first paint). Falls back to creating the
-		// session id on the spot rather than silently sending null.
+		// Guards the edge case where someone sends before the auth effect has
+		// resolved a session id yet. Falls back to creating one on the spot
+		// rather than silently sending null.
 		const sessionId = sessionIdRef.current ?? getOrCreateSessionId();
 		sessionIdRef.current = sessionId;
 
@@ -64,8 +196,7 @@ export default function ChatPanel() {
 		setCurrentAction("🤔 Thinking…");
 
 		try {
-			// streamAgentMessage is an async generator on apiClient — see
-			// lib/apiClient_agent_addition.ts for what to add there. It yields
+			// streamAgentMessage is an async generator on apiClient. It yields
 			// one parsed event per NDJSON line as the backend produces them.
 			for await (const event of apiClient.streamAgentMessage(text, sessionId)) {
 				if (event.type === "tool_call") {
@@ -75,7 +206,14 @@ export default function ChatPanel() {
 					updateToolItem(event.tool_call_id, { status: "done", result: event.result } as Partial<ChatItem>);
 					setCurrentAction("🤔 Thinking…");
 				} else if (event.type === "final") {
-					pushItem({ kind: "assistant", text: event.reply, recommendations: event.recommendations });
+					pushItem({
+						kind: "assistant",
+						id: crypto.randomUUID(),
+						text: event.reply,
+						recommendations: event.recommendations,
+						cart: event.cart,
+						cartStatus: event.cart ? "pending" : undefined,
+					});
 					setCurrentAction(null);
 				} else if (event.type === "error") {
 					pushItem({ kind: "error", text: event.error });
@@ -93,13 +231,15 @@ export default function ChatPanel() {
 	return (
 		<div className="flex flex-col h-[500px] bg-background">
 			<div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-				{items.length === 0 && (
+				{loadingHistory ? (
+					<p className="text-sm text-muted-foreground animate-pulse">Loading conversation…</p>
+				) : items.length === 0 ? (
 					<p className="text-sm text-muted-foreground">
 						Ask something like "a laptop under ₹60,000 with 16GB RAM in stock".
 					</p>
-				)}
+				) : null}
 				{items.map((item, i) => (
-					<ChatBubble key={i} item={item} />
+					<ChatBubble key={i} item={item} onApproveCart={approveCart} onRejectCart={rejectCart} />
 				))}
 				{busy && currentAction && (
 					<p className="text-xs text-muted-foreground animate-pulse">{currentAction}</p>
@@ -160,7 +300,106 @@ function ToolBubble({ item }: { item: Extract<ChatItem, { kind: "tool" }> }) {
 	);
 }
 
-function ChatBubble({ item }: { item: ChatItem }) {
+function CartSummaryCard({
+	cart,
+	status,
+	onApprove,
+	onReject,
+}: {
+	cart: CartSummary;
+	status?: Extract<ChatItem, { kind: "assistant" }>["cartStatus"];
+	onApprove: () => void;
+	onReject: () => void;
+}) {
+	// The line items and total here come straight from the calculate_cart
+	// tool result the backend captured during the turn — never from
+	// anything the model said in its text reply above. Approving hits the
+	// real add-to-cart endpoint with only {product_id, quantity} — the
+	// backend recomputes price/discount itself when it actually writes the
+	// cart, so this preview is never trusted twice over either.
+	const hasErrors = cart.errors.length > 0;
+
+	return (
+		<div className="border border-border rounded-lg overflow-hidden bg-background">
+			<div className="px-3 py-2 border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground">
+				Cart total (verified)
+			</div>
+			<div className="divide-y divide-border/60">
+				{cart.line_items.map((li) => (
+					<div key={li.product_id} className="flex justify-between px-3 py-1.5 text-sm">
+						<span>
+							{li.name} × {li.quantity}
+						</span>
+						<span className="tabular-nums">₹{Number(li.subtotal).toLocaleString()}</span>
+					</div>
+				))}
+			</div>
+			<div className="flex justify-between px-3 py-2 text-sm font-semibold border-t border-border">
+				<span>Total</span>
+				<span className="tabular-nums">₹{Number(cart.total_amount).toLocaleString()}</span>
+			</div>
+			{hasErrors && (
+				<div className="px-3 py-2 text-xs text-red-600 border-t border-border bg-red-50">
+					{cart.errors.map((e, i) => (
+						<div key={i}>
+							Product #{e.product_id}: {e.error}
+						</div>
+					))}
+				</div>
+			)}
+
+			<div className="border-t border-border px-3 py-2">
+				{status === "pending" && (
+					<div className="flex gap-2">
+						<button
+							onClick={onApprove}
+							disabled={hasErrors && cart.line_items.length === 0}
+							className="flex-1 px-3 py-1.5 rounded bg-black text-white text-xs font-medium disabled:opacity-50"
+						>
+							Approve — add to cart
+						</button>
+						<button
+							onClick={onReject}
+							className="flex-1 px-3 py-1.5 rounded border border-border text-xs font-medium hover:bg-muted"
+						>
+							Reject
+						</button>
+					</div>
+				)}
+				{status === "approving" && (
+					<p className="text-xs text-muted-foreground animate-pulse">Adding to cart…</p>
+				)}
+				{status === "approved" && (
+					<p className="text-xs text-green-600 font-medium">✅ Added to your cart</p>
+				)}
+				{status === "rejected" && (
+					<p className="text-xs text-muted-foreground">Cancelled — nothing was added.</p>
+				)}
+				{status === "error" && (
+					<div className="flex gap-2 items-center">
+						<p className="text-xs text-red-600 flex-1">Something went wrong.</p>
+						<button
+							onClick={onApprove}
+							className="px-3 py-1.5 rounded bg-black text-white text-xs font-medium"
+						>
+							Retry
+						</button>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
+function ChatBubble({
+	item,
+	onApproveCart,
+	onRejectCart,
+}: {
+	item: ChatItem;
+	onApproveCart: (assistantId: string, cart: CartSummary) => void;
+	onRejectCart: (assistantId: string) => void;
+}) {
 	if (item.kind === "user") {
 		return (
 			<div className="ml-auto max-w-[80%] bg-black text-white rounded-lg px-3 py-2 text-sm w-fit">
@@ -210,6 +449,14 @@ function ChatBubble({ item }: { item: ChatItem }) {
 							</div>
 						))}
 					</div>
+				)}
+				{item.cart && (
+					<CartSummaryCard
+						cart={item.cart}
+						status={item.cartStatus}
+						onApprove={() => onApproveCart(item.id, item.cart!)}
+						onReject={() => onRejectCart(item.id)}
+					/>
 				)}
 			</div>
 		);
