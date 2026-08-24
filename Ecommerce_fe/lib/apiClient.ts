@@ -1,6 +1,7 @@
+import type { ChatResponse, StreamEvent } from './agentTypes'
 import { ApiResponse, AuthResponse } from './types'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL
+const API_BASE = process.env.NEXT_PUBLIC_LOCAL_URL
 
 type LogoutCallback = () => void
 let logoutCallback: LogoutCallback | null = null
@@ -56,7 +57,7 @@ class ApiClient {
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: {
-          'refresh_token': this.refreshToken,
+          'refresh-token': this.refreshToken,
         },
       })
 
@@ -386,6 +387,76 @@ class ApiClient {
 
   async getOrder(id: string | number) {
     return this.request(`/orders/${id}`)
+  }
+
+  //Agent chat Endpoints
+
+  async sendAgentMessage(message: string, sessionId: string): Promise<ChatResponse> {
+    const response = await this.request<ChatResponse>('/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, session_id: sessionId }),
+    })
+
+    return response as Partial<ChatResponse> & { data?: Partial<ChatResponse> }
+  }
+
+  // Loads persisted history for a session. Like sendAgentMessage, the agent
+  // routes return their payload directly rather than ResponseHandler-wrapped
+  // — the `data` fallback below is defensive in case that ever changes.
+  async getChatHistory(sessionId: string): Promise<{ messages: any[] } & Partial<ApiResponse<any>>> {
+    const response = await this.request<{ messages: any[] }>(
+      `/agent/chat/history?session_id=${encodeURIComponent(sessionId)}`
+    )
+    return response as any
+  }
+
+  // Streaming variant of sendAgentMessage — hits /agent/chat/stream and yields
+  // one parsed event per NDJSON line as the backend produces them (tool_call,
+  // tool_result, final, error). Can't go through `this.request` since that
+  // awaits response.json() once and returns — this needs the raw body stream.
+  // Reuses the same token/refresh flow as `request` so it's authenticated
+  // (and recovers from an expired token) the same way every other call is.
+  async *streamAgentMessage(message: string, sessionId: string): AsyncGenerator<StreamEvent> {
+    const url = `${API_BASE}/agent/chat/stream`
+    const body = JSON.stringify({ message, session_id: sessionId })
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`
+    }
+
+    let response = await fetch(url, { method: 'POST', headers, body })
+
+    if (response.status === 401 && this.refreshToken) {
+      console.log('[API] Got 401 on stream, attempting token refresh...')
+      const refreshed = await this.refreshAccessToken()
+      if (refreshed && this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`
+        response = await fetch(url, { method: 'POST', headers, body })
+      }
+    }
+
+    if (!response.ok || !response.body) {
+      const error = await response.json().catch(() => ({} as any))
+      throw new Error(error.message || error.detail || `Agent responded with ${response.status}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      let newlineIdx: number
+      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim()
+        buffer = buffer.slice(newlineIdx + 1)
+        if (!line) continue
+        yield JSON.parse(line) as StreamEvent
+      }
+    }
   }
 }
 

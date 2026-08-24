@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Float, ARRAY, Enum
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Float, ARRAY, Enum,Text
 from sqlalchemy.sql.expression import text
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.orm import relationship
@@ -27,6 +27,8 @@ class User(Base):
 
     # Relationship with orders
     orders = relationship("Order", back_populates="user")
+
+    chats = relationship("ChatMessage", back_populates="user")
 
 
 class Cart(Base):
@@ -140,4 +142,22 @@ class ProductAnalytics(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False)
 
     # Relationship with product
+    
     product = relationship("Product", back_populates="analytics")
+
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String, nullable=False)          
+    content = Column(Text, nullable=True)           
+    tool_calls = Column(Text, nullable=True)         
+    tool_call_id = Column(String, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False)
+
+
+    user = relationship("User", back_populates="chats")

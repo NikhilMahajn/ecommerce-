@@ -12,7 +12,7 @@ class PricingService:
     """Dynamic pricing service using Groq AI based on product analytics"""
 
     def __init__(self):
-        self.client = Groq(api_key=settings.groq_api_key or "")
+        self.client = Groq(api_key=settings.GROQ_API_KEY or "")
         self.rate_limit_delay = 1  # seconds between API calls
         
     def get_price_adjustment_from_groq(self, product: Product, analytics: ProductAnalytics) -> float:

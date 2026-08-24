@@ -5,7 +5,7 @@ from app.utils.responses import ResponseHandler
 from sqlalchemy.orm import joinedload
 from app.core.security import get_current_user
 from app.services.analytics import ProductAnalyticsService
-
+from app.services.products import ProductService
 
 class CartService:
     # Get All Carts
@@ -143,3 +143,98 @@ class CartService:
         db.delete(cart)
         db.commit()
         return ResponseHandler.delete_success("Cart", cart_id, cart)
+
+
+    @staticmethod
+    def validate_cart(db: Session, items: list[dict]) -> tuple[list[dict], list[dict]]:
+        """
+        Checks each proposed {product_id, quantity} pair against the database.
+        Returns (valid_items, errors):
+        valid_items: [{"product_id", "quantity", "product": <Product row>}]
+        errors:      [{"product_id", "error": "..."}]
+    
+        Only product_id/quantity are read from `items` — anything else the
+        caller (or the LLM) might have included (a price, a name) is ignored.
+        Existence and stock are always looked up fresh here.
+        """
+        valid_items: list[dict] = []
+        errors: list[dict] = []
+    
+        for item in items or []:
+            product_id = item.get("product_id")
+            quantity = item.get("quantity")
+    
+            if not isinstance(product_id, int):
+                errors.append({"product_id": product_id, "error": "invalid product_id"})
+                continue
+            if not isinstance(quantity, int) or quantity <= 0:
+                errors.append({"product_id": product_id, "error": "quantity must be a positive integer"})
+                continue
+    
+            product = db.query(Product).filter(Product.id == product_id).first()
+            if not product:
+                errors.append({"product_id": product_id, "error": "product does not exist"})
+                continue
+    
+            inventory = ProductService.check_inventory(db, product_id=product_id, quantity=quantity)
+            if not inventory or not inventory.get("available"):
+                in_stock = inventory.get("in_stock") if inventory else 0
+                errors.append({
+                    "product_id": product_id,
+                    "error": f"only {in_stock} in stock, requested {quantity}",
+                })
+                continue
+    
+            valid_items.append({"product_id": product_id, "quantity": quantity, "product": product})
+    
+        return valid_items, errors
+    
+    
+    @staticmethod
+    def calculate_cart(db: Session, items: list[dict]) -> dict:
+        """
+        PURE calculation — the ONLY place a total is computed for the agent
+        flow. Uses the exact same pricing formula as create_cart/update_cart
+        (quantity * price * (1 - discount_percentage/100)), so what the agent
+        quotes always matches what a real cart would charge. No value in the
+        output comes from anywhere except a fresh Product lookup done here.
+    
+        Returns:
+        {
+            "line_items": [{"product_id","name","unit_price","discount_percentage",
+                            "quantity","subtotal"}],
+            "subtotal": <sum of line subtotals>,
+            "total_amount": <same as subtotal — kept as its own key so
+                            shipping/tax can be layered in later without
+                            changing this function's contract>,
+            "errors": [{"product_id","error"}, ...]  # invalid lines, skipped
+        }
+        """
+        valid_items, errors = CartService.validate_cart(db, items)
+    
+        line_items = []
+        subtotal_total = 0.0
+        for entry in valid_items:
+            product = entry["product"]
+            quantity = entry["quantity"]
+            unit_price = float(product.price)
+            discount_pct = float(product.discount_percentage or 0)
+            line_subtotal = round(quantity * unit_price * (1 - discount_pct / 100), 2)
+            subtotal_total = round(subtotal_total + line_subtotal, 2)
+    
+            line_items.append({
+                "product_id": product.id,
+                "name": getattr(product, "title", None) or getattr(product, "name", None),
+                "unit_price": unit_price,
+                "discount_percentage": discount_pct,
+                "quantity": quantity,
+                "subtotal": line_subtotal,
+            })
+    
+        return {
+            "line_items": line_items,
+            "subtotal": subtotal_total,
+            "total_amount": subtotal_total,
+            "errors": errors,
+        }
+    

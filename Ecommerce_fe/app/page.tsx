@@ -8,6 +8,7 @@ import { useToast } from '@/components/Toast'
 import { Product, CartItem } from '@/lib/types'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth } from '@/lib/AuthContext'
+import ChatPanel from '@/components/ChatPanel'
 
 export default function Home() {
   const router = useRouter()
@@ -17,6 +18,7 @@ export default function Home() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [cartId, setCartId] = useState<string | null>(null)
   const [showCart, setShowCart] = useState(false)
+  const [showChat, setShowChat] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const { addToast } = useToast()
@@ -462,6 +464,43 @@ export default function Home() {
               <p className="text-muted-foreground">Your cart is empty</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* AI Shopping Assistant — floating launcher + drawer */}
+      <button
+        onClick={() => setShowChat((prev) => !prev)}
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+        aria-label="Open AI shopping assistant"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.297 0-2.53-.246-3.646-.687L3 20l1.396-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <span className="text-sm font-semibold hidden sm:inline">Ask AI</span>
+      </button>
+
+      {showChat && (
+        <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setShowChat(false)} />
+      )}
+      <div
+        className={`fixed bottom-24 right-6 z-50 w-[92vw] max-w-md transform transition-all duration-300 origin-bottom-right ${
+          showChat ? 'scale-100 opacity-100' : 'scale-95 opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="bg-card border border-border rounded-lg shadow-2xl overflow-hidden">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-border">
+            <h2 className="font-heading font-semibold text-foreground">Shopping Assistant</h2>
+            <button
+              onClick={() => setShowChat(false)}
+              className="p-1 hover:bg-muted rounded-lg transition-colors"
+              aria-label="Close assistant"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <ChatPanel onCartApproved={loadCart} isAuthenticated={authLoading ? null : isAuthenticated} />
         </div>
       </div>
     </main>

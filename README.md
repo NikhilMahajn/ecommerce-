@@ -1,44 +1,52 @@
 # E-Commerce Platform
 
-A full-stack, modern e-commerce application built with Next.js and FastAPI. This platform provides a complete shopping experience with user authentication, product browsing, cart management, and order checkout functionality.
+A full-stack, modern e-commerce application built with **Next.js** and **FastAPI**. It provides a complete shopping experience — user authentication, product browsing, cart management, order checkout — plus an **AI shopping assistant**, **dynamic pricing**, and **product analytics**.
 
 ---
 
 ## 🎯 Project Overview
 
-This e-commerce platform is a production-ready web application that enables users to:
+This platform is a production-style web application where users can:
 
 - Browse and search for products by category
-- Manage shopping carts with real-time updates
-- Create accounts and authenticate securely
+- Chat with an AI shopping assistant that searches the real catalog and manages the cart
+- Manage a shopping cart with real-time updates
+- Create accounts and authenticate securely (JWT)
 - Checkout and place orders
-- Manage user profiles and addresses
+- Manage user profiles
 
 Admin users can:
 
-- Add and manage products
+- Add and manage products (with Cloudinary image uploads)
 - Organize products into categories
 - View and manage orders
-- Track inventory
+- Track product analytics (views, cart adds, purchases)
+- Let a background worker adjust prices dynamically every hour
 
 ---
 
 ## 🏗️ Architecture
 
-The application follows a **client-server architecture** with a clear separation of concerns:
+Client–server architecture with a clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend (Ecommerce_fe)                  │
 │                   Next.js + React + TypeScript              │
-│            (Browser - Port 3000)                            │
+│                     (Browser - Port 3000)                   │
 └────────────────────────┬────────────────────────────────────┘
-                         │ HTTP/REST API Calls
+                         │ HTTP / REST API Calls
                          ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                    Backend (Ecommerce-Api)                  │
 │                     FastAPI + Python                        │
-│            (Server - Port 8000)                             │
+│                     (Server - Port 8000)                    │
+│                                                             │
+│  ┌───────────────────┐   ┌──────────────────────────────┐   │
+│  │ Pricing Worker    │   │ AI Agent (Groq tool calling) │   │
+│  │ (APScheduler,     │   │ search / inventory / cart    │   │
+│  │  hourly job)      │   │ tools + chat history         │   │
+│  └───────────────────┘   └──────────────────────────────┘   │
 └────────────────────────┬────────────────────────────────────┘
                          │ Database Queries
                          ↓
@@ -51,39 +59,35 @@ The application follows a **client-server architecture** with a clear separation
 
 ## 💻 Tech Stack
 
-### **Frontend (Ecommerce_fe)**
+### Frontend (`Ecommerce_fe`)
 
 | Technology          | Purpose                                              |
 | ------------------- | ---------------------------------------------------- |
-| **Next.js 16**      | React framework with App Router, SSR, and API routes |
+| **Next.js 16**      | React framework with App Router                      |
 | **React 19**        | UI library for building interactive components       |
-| **TypeScript**      | Type-safe JavaScript for better code quality         |
-| **Tailwind CSS**    | Utility-first CSS framework for styling              |
-| **Shadcn/ui**       | Pre-built, accessible UI components                  |
+| **TypeScript**      | Type-safe JavaScript                                 |
+| **Tailwind CSS 4**  | Utility-first CSS framework                          |
+| **shadcn/ui**       | Pre-built, accessible UI components                  |
 | **React Hook Form** | Efficient form state management                      |
-| **Zod**             | Schema validation library                            |
-| **Axios**           | HTTP client for API communication                    |
+| **Zod**             | Schema validation                                    |
 | **Cloudinary**      | Cloud-based image storage and optimization           |
-| **Lucide React**    | Icon library                                         |
 | **Sonner**          | Toast notification system                            |
 | **pnpm**            | Fast, disk space-efficient package manager           |
 
-### **Backend (Ecommerce-Api)**
+### Backend (`Ecommerce-Api`)
 
-| Technology           | Purpose                                      |
-| -------------------- | -------------------------------------------- |
-| **FastAPI**          | Modern, fast web framework for building APIs |
-| **Python 3.x**       | Core backend language                        |
-| **SQLAlchemy**       | ORM for database operations                  |
-| **Pydantic**         | Data validation and serialization            |
-| **Alembic**          | Database migration tool                      |
-| **PostgreSQL**       | Relational database                          |
-| **psycopg2**         | PostgreSQL adapter for Python                |
-| **python-jose**      | JWT token creation and verification          |
-| **bcrypt**           | Password hashing and verification            |
-| **python-multipart** | Form data parsing                            |
-| **python-dotenv**    | Environment variable management              |
-| **CORS Middleware**  | Cross-Origin Resource Sharing support        |
+| Technology            | Purpose                                            |
+| --------------------- | -------------------------------------------------- |
+| **FastAPI**           | Modern, fast web framework for building APIs       |
+| **SQLAlchemy 2**      | ORM for database operations                        |
+| **Pydantic v2**       | Data validation and settings management            |
+| **Alembic**           | Database migrations                                |
+| **PostgreSQL**        | Relational database                                |
+| **python-jose**       | JWT token creation and verification                |
+| **bcrypt / passlib**  | Password hashing                                   |
+| **APScheduler**       | Background scheduler for the pricing worker        |
+| **Groq SDK**          | LLM-powered shopping assistant & dynamic pricing   |
+| **Uvicorn**           | ASGI server                                        |
 
 ---
 
@@ -93,300 +97,264 @@ The application follows a **client-server architecture** with a clear separation
 Ecommerce/
 │
 ├── Ecommerce_fe/                 # Frontend Application (Next.js)
-│   ├── app/                       # Next.js App Router
+│   ├── app/                      # Next.js App Router
 │   │   ├── page.tsx              # Home page
 │   │   ├── cart/                 # Shopping cart page
 │   │   ├── product/[id]/         # Product detail page
 │   │   ├── login/                # Login page
 │   │   ├── signup/               # User registration
 │   │   └── admin/                # Admin dashboard
-│   │
-│   ├── components/                # Reusable React components
-│   │   ├── Navbar.tsx            # Navigation bar
-│   │   ├── ProductCard.tsx       # Product display card
-│   │   ├── AddProductDialog.tsx  # Admin: Add product modal
-│   │   ├── AddCategoryDialog.tsx # Admin: Add category modal
-│   │   ├── Toast.tsx             # Toast notifications
-│   │   └── ui/                   # Shadcn/ui component library
-│   │
-│   ├── hooks/                     # Custom React hooks
-│   │   ├── use-toast.ts          # Toast hook
-│   │   └── use-mobile.ts         # Mobile detection hook
-│   │
-│   ├── lib/                       # Utility functions and contexts
-│   │   ├── apiClient.ts          # Axios API client instance
-│   │   ├── AuthContext.tsx       # Authentication context
-│   │   ├── types.ts              # TypeScript type definitions
-│   │   └── utils.ts              # Helper functions
-│   │
-│   ├── public/                    # Static assets
-│   ├── styles/                    # Global styles
-│   ├── package.json              # Dependencies
-│   ├── tsconfig.json             # TypeScript config
-│   ├── tailwind.config.ts        # Tailwind CSS config
-│   └── next.config.mjs           # Next.js configuration
+│   ├── components/               # Reusable React components + shadcn/ui library
+│   ├── hooks/                    # Custom React hooks
+│   ├── lib/                      # API client, auth context, types, utils
+│   ├── public/                   # Static assets
+│   └── styles/                   # Global styles
 │
 ├── Ecommerce-Api/                # Backend Application (FastAPI)
 │   ├── app/
-│   │   ├── main.py               # FastAPI app initialization
-│   │   │
-│   │   ├── routers/              # API route handlers
+│   │   ├── main.py               # FastAPI app initialization & router wiring
+│   │   ├── routers/              # Route handlers
 │   │   │   ├── auth.py           # Authentication endpoints
-│   │   │   ├── users.py          # User management
-│   │   │   ├── products.py       # Product CRUD operations
+│   │   │   ├── users.py          # User management (admin)
+│   │   │   ├── accounts.py       # Self-service account management
+│   │   │   ├── products.py       # Product CRUD
 │   │   │   ├── categories.py     # Category management
 │   │   │   ├── carts.py          # Shopping cart operations
 │   │   │   ├── orders.py         # Order management
-│   │   │   └── accounts.py       # Account settings
-│   │   │
-│   │   ├── models/
-│   │   │   └── models.py         # SQLAlchemy ORM models
-│   │   │
+│   │   │   ├── admin.py          # Admin dashboard endpoints
+│   │   │   ├── analytics.py      # Product analytics
+│   │   │   ├── agent.py          # AI shopping assistant
+│   │   │   ├── chatHistory.py    # Agent conversation history
+│   │   │   └── pricing.py        # Dynamic pricing endpoints
+│   │   ├── services/             # Business logic layer
+│   │   ├── workers/
+│   │   │   └── pricing_worker.py # APScheduler job (hourly price updates)
+│   │   ├── models/models.py      # SQLAlchemy ORM models
 │   │   ├── schemas/              # Pydantic request/response schemas
-│   │   ├── services/             # Business logic
-│   │   │
-│   │   ├── db/
-│   │   │   └── database.py       # Database connection & session
-│   │   │
-│   │   ├── core/
-│   │   │   ├── config.py         # Application settings
-│   │   │   └── security.py       # Security utilities (JWT, passwords)
-│   │   │
+│   │   ├── db/database.py        # Database connection & session
+│   │   ├── core/                 # Config (settings) + security (JWT, hashing)
 │   │   └── utils/                # Helper functions
-│   │
-│   ├── alembic/                  # Database migrations
-│   │   └── versions/             # Migration files
-│   │
-│   ├── requirements.txt          # Python dependencies
-│   ├── run.py                    # Application entry point
-│   └── main.py                   # Legacy entry point
+│   ├── alembic/versions/         # Migration files
+│   ├── requirements.txt
+│   ├── run.py                    # Dev server entry point
+│   ├── Dockerfile
+│   └── render.yaml               # Render.com deployment config
 │
-├── README.md                      # This file
-└── ORDER_CHECKOUT_IMPLEMENTATION.md  # Detailed checkout flow documentation
+└── README.md
 ```
 
 ---
 
 ## 🚀 Features
 
-### **Customer Features**
+### Customer Features
 
-- ✅ User registration and authentication
-- ✅ Browse products by category
-- ✅ View product details
-- ✅ Add/remove items from cart
-- ✅ Real-time cart updates
+- ✅ User registration and authentication (JWT access + refresh tokens)
+- ✅ Browse products by category, view product details
+- ✅ Add/remove/update items in the cart
 - ✅ Secure checkout with order placement
 - ✅ Order history tracking
-- ✅ User profile management
+- ✅ Profile management
+- ✅ **AI shopping assistant**: grounded in the live catalog via tool calls (`search_products`, `get_product`, `check_inventory`, `add_to_cart`, …), with persisted chat history
 
-### **Admin Features**
+### Admin Features
 
-- ✅ Add new products with image uploads (via Cloudinary)
+- ✅ Add new products with image uploads (Cloudinary)
 - ✅ Create and manage product categories
-- ✅ View all orders
-- ✅ Manage product inventory
 - ✅ User management
+- ✅ View orders and manage inventory
+- ✅ Product analytics: views, cart adds, purchases; top products; overall summary
 
-### **Security Features**
+### Automation & Intelligence
 
-- ✅ JWT-based authentication
+- ✅ **Dynamic pricing worker**: APScheduler background job that re-prices products hourly using the Groq LLM
+- ✅ Manual price-update trigger endpoint for testing/admin use
+
+### Security
+
+- ✅ JWT-based authentication with refresh tokens
 - ✅ Password hashing with bcrypt
 - ✅ Role-based access control (User/Admin)
 - ✅ CORS protection
 - ✅ Input validation with Pydantic
-- ✅ Secure token refresh mechanism
 
 ---
 
 ## 🛠️ Getting Started
 
-### **Prerequisites**
+### Prerequisites
 
-- Node.js 18+ (for frontend)
-- Python 3.10+ (for backend)
-- PostgreSQL 12+ (database)
-- pnpm (frontend package manager)
-- Cloudinary account (for image handling)
+- Node.js 18+ and pnpm
+- Python 3.10+
+- PostgreSQL 12+
+- A [Groq](https://console.groq.com) API key (AI assistant + dynamic pricing)
+- A [Cloudinary](https://cloudinary.com) account (product images)
 
-### **Backend Setup**
+### Backend Setup
 
-1. **Navigate to backend directory:**
+1. Navigate to the backend directory and create a virtual environment:
 
    ```bash
    cd Ecommerce-Api
-   ```
-
-2. **Create and activate virtual environment:**
-
-   ```bash
    python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source venv/bin/activate   # On Windows: venv\Scripts\activate
    ```
 
-3. **Install dependencies:**
+2. Install dependencies:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Set up environment variables:**
-   Create a `.env` file in `Ecommerce-Api/` with:
+3. Create a `.env` file in `Ecommerce-Api/`:
 
    ```env
-   DATABASE_URL=postgresql://user:password@localhost:5432/ecommerce
-   SECRET_KEY=your_secret_key_here
-   ALGORITHM=HS256
-   ACCESS_TOKEN_EXPIRE_MINUTES=30
+   # Database
+   db_username=postgres
+   db_password=your_password
+   db_hostname=localhost
+   db_port=5432
+   db_name=ecommerce
+
+   # JWT
+   secret_key=your_secret_key_here
+   algorithm=HS256
+   access_token_expire_minutes=30
+
+   # Groq / AI
+   GROQ_API_KEY=your_groq_api_key
+   MODEL=llama-3.3-70b-versatile
+   MAX_TOOL_ITERATIONS=5
    ```
 
-5. **Run database migrations:**
+4. Run database migrations and start the dev server:
 
    ```bash
    alembic upgrade head
-   ```
-
-6. **Start the server:**
-   ```bash
    python run.py
    ```
-   The API will be available at `http://localhost:8000`
 
-### **Frontend Setup**
+   The API is now available at `http://localhost:8000`.
 
-1. **Navigate to frontend directory:**
+### Frontend Setup
+
+1. Navigate to the frontend directory and install dependencies:
 
    ```bash
    cd Ecommerce_fe
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
    pnpm install
    ```
 
-3. **Set up environment variables:**
-   Create a `.env.local` file with:
+2. Configure environment variables (`.env.local`):
 
    ```env
    NEXT_PUBLIC_API_URL=http://localhost:8000
    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+   NEXT_PUBLIC_CLOUDINARY_API_KEY=your_cloudinary_api_key
+   NEXT_PUBLIC_CLOUDINARY_API_SECRET=your_cloudinary_api_secret
    ```
 
-4. **Start development server:**
+3. Start the development server:
+
    ```bash
    pnpm dev
    ```
-   The application will be available at `http://localhost:3000`
+
+   The app is available at `http://localhost:3000`.
+
+### Docker (Backend)
+
+The backend ships with a `Dockerfile` and a `render.yaml` for one-click deployment on Render.com.
 
 ---
 
 ## 📡 API Documentation
 
-Once the backend is running, access the interactive API documentation:
+Once the backend is running:
 
 - **Swagger UI:** `http://localhost:8000/docs`
 - **ReDoc:** `http://localhost:8000/redoc`
+- **OpenAPI JSON:** `http://localhost:8000/openapi.json`
 
-### **Main API Endpoints**
+### Main Endpoints
 
-| Method | Endpoint            | Description              |
-| ------ | ------------------- | ------------------------ |
-| POST   | `/auth/register`    | User registration        |
-| POST   | `/auth/login`       | User login               |
-| GET    | `/products`         | List all products        |
-| GET    | `/products/{id}`    | Get product details      |
-| GET    | `/categories`       | List all categories      |
-| POST   | `/cart/add`         | Add item to cart         |
-| GET    | `/cart`             | Get cart items           |
-| POST   | `/orders`           | Create new order         |
-| GET    | `/orders`           | Get user orders          |
-| POST   | `/admin/products`   | Add new product (admin)  |
-| POST   | `/admin/categories` | Add new category (admin) |
+| Method | Endpoint                        | Description                        | Access |
+| ------ | ------------------------------- | ---------------------------------- | ------ |
+| POST   | `/auth/signup`                  | Register a new user                | Public |
+| POST   | `/auth/login`                   | Login, get access/refresh tokens   | Public |
+| POST   | `/auth/refresh`                 | Refresh access token               | Public |
+| GET    | `/products/`                    | List / search products             | User   |
+| GET    | `/products/{id}`                | Product details                    | User   |
+| GET    | `/categories/`                  | List categories                    | User   |
+| GET    | `/carts/mycart`                 | Get current user's cart            | User   |
+| POST   | `/orders/`                      | Place an order from the cart       | User   |
+| GET    | `/account/`                     | Get authenticated user's account   | User   |
+| POST   | `/agent/chat`                   | Chat with the AI shopping assistant| User   |
+| GET    | `/chatHistory/`                 | Retrieve agent conversation history| User   |
+| POST   | `/pricing/update`               | Trigger dynamic price update       | Admin  |
+| GET    | `/analytics/products/{id}`      | Per-product analytics              | User   |
+| GET    | `/analytics/top-products`       | Top products by metric             | Admin  |
+| GET    | `/analytics/summary`            | Overall analytics summary          | Admin  |
+
+> See `/docs` for the complete, always up-to-date endpoint list.
 
 ---
 
 ## 🔄 Key Workflows
 
-### **Authentication Flow**
+### Authentication Flow
 
 1. User registers with email and password
-2. Password is hashed using bcrypt
-3. User receives JWT access and refresh tokens
-4. Tokens are stored in localStorage on frontend
-5. All subsequent requests include JWT in Authorization header
+2. Password is hashed with bcrypt
+3. Server issues JWT access + refresh tokens
+4. Requests include the JWT in the `Authorization` header
 
-### **Shopping Flow**
+### Shopping Flow
 
 1. User browses products by category
-2. Adds items to cart (stored in context/state)
-3. Views cart summary with pricing
-4. Enters delivery address
-5. Clicks checkout to create order
-6. Order is saved to database
-7. Cart is cleared after successful order
+2. Items are added to a persistent server-side cart
+3. At checkout, the user provides delivery details
+4. An order is created from the cart and the cart is cleared
 
-For detailed checkout implementation, see [ORDER_CHECKOUT_IMPLEMENTATION.md](ORDER_CHECKOUT_IMPLEMENTATION.md)
+### AI Assistant Flow
+
+1. User sends a message to `/agent/chat`
+2. The Groq-hosted LLM decides which tools to call (search products, check inventory, add to cart…)
+3. Tool results ground every recommendation — the assistant only recommends products that actually exist in the catalog with real prices/stock
+4. Conversations are persisted per user in `chat_history`
+
+### Dynamic Pricing Flow
+
+1. Every hour, APScheduler fires the pricing worker
+2. The worker feeds sales/inventory data to the Groq model
+3. Suggested prices are validated and written back to the database
 
 ---
 
 ## 🗄️ Database Schema
 
-The application uses **PostgreSQL** with the following main tables:
+Main tables (managed via Alembic migrations):
 
-- `users` - User accounts and profiles
-- `products` - Product information
-- `categories` - Product categories
-- `carts` - Shopping cart items
-- `orders` - Order records
-- `order_items` - Items within each order
-
-All tables include timestamps (`created_at`, `updated_at`) for audit trails.
-
----
-
-## 📝 Development Guidelines
-
-### **Frontend**
-
-- Use TypeScript for type safety
-- Follow React best practices with hooks
-- Use Tailwind CSS for styling
-- Implement proper error handling with toast notifications
-- Validate user input with React Hook Form + Zod
-
-### **Backend**
-
-- Follow FastAPI best practices
-- Use type hints with Python
-- Implement proper exception handling
-- Validate input with Pydantic
-- Use SQLAlchemy for database operations
-- Create database migrations for schema changes
+- `users` — user accounts, roles, addresses
+- `products` — product info, price, stock
+- `categories` — product categories
+- `carts` / `cart_items` — shopping carts
+- `orders` / `order_items` — orders and their line items
+- `chat_history` — AI assistant conversations
+- Product analytics columns — views, cart adds, purchases
 
 ---
 
 ## 🤝 Contributing
 
-1. Create a feature branch (`git checkout -b feature/amazing-feature`)
-2. Commit your changes (`git commit -m 'Add some amazing feature'`)
-3. Push to the branch (`git push origin feature/amazing-feature`)
-4. Open a Pull Request
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
 This project is open source and available under the MIT License.
-
----
-
-## 📧 Support
-
-For issues, questions, or suggestions, please open an issue on GitHub.
-
----
-
-**Last Updated:** April 2026
-**Version:** 1.0.0

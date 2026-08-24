@@ -79,3 +79,7 @@ export interface ApiResponse<T = any> {
   data?: T
   error?: string
 }
+
+export interface ChatResponse {
+  reply: string;
+}

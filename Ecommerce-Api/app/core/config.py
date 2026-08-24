@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int
 
     # Groq API Config (Optional - for dynamic pricing)
-    groq_api_key: str
+    GROQ_API_KEY: str
+    MODEL:str
+    MAX_TOOL_ITERATIONS:int
 
     class Config:
         env_file = ".env"
