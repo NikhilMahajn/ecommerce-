@@ -65,6 +65,13 @@ HARD RULES:
    total_amount it returns. You are not a source of truth for arithmetic;
    the tool is. If calculate_cart reports errors (invalid product, out of
    stock, bad quantity), relay those plainly rather than working around them.
+8. Once the user has settled on (or you've just confirmed) a product, you MAY
+   call get_related_products ONCE to suggest a genuinely relevant add-on or
+   alternative — same category, in stock, and within any remaining budget you
+   know about (pass max_price = their stated budget minus the price of what
+   they just picked, if you know it). Don't call this speculatively on every
+   turn, and never suggest something over budget or unrelated just to upsell.
+   If nothing relevant or in-budget comes back, don't force a suggestion.
 """
 
 
@@ -106,10 +113,6 @@ class _FinalAnswer:
 
 class AgentService:
 
-    # ------------------------------------------------------------------
-    # Existing blocking endpoint — unchanged behavior, still returns
-    # {"reply": ...} once the whole turn is done.
-    # ------------------------------------------------------------------
     @staticmethod
     def agent_chat(token: str, db: Session, chat: ChatRequest):
         logger.info("Agent chat request received: message_length=%s", len(chat.message or ""))
@@ -117,14 +120,14 @@ class AgentService:
         user_id = get_current_user(token)
 
         history = ChatHistoryService.load_history(db, chat.session_id, user_id)
-        history.append({"role": "user", "content": chat.message})
-        starting_len = len(history)
+        user_message = {"role": "user", "content": chat.message}
 
         # A fresh system prompt every turn, on its own list — not persisted
         # into stored history, since it's static instructions, not
         # conversation content. `api_messages` (not `history`) is what the
         # agent loop mutates with tool calls/results as it runs.
-        api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+        api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history + [user_message]
+        turn_start = len(api_messages)  # everything from here on is new activity this turn
 
         def tool_executor(name: str, tool_input: dict):
             return AgentService.execute_tool(db, name, tool_input)
@@ -133,10 +136,17 @@ class AgentService:
             final_msg = AgentService.run_agent_turn(api_messages, TOOL_SCHEMAS, tool_executor)
             logger.info("Agent chat request completed successfully")
 
-            # Skip the leading system message we added; keep only what's new
-            # since the user's message (tool calls/results the loop appended).
-            new_messages = api_messages[1 + starting_len:]
-            new_messages.append({"role": "assistant", "content": final_msg.content})
+            # Built explicitly rather than sliced by index — the user's own
+            # message goes in first no matter what the loop did to
+            # api_messages, then whatever tool calls/results the loop
+            # appended, then the final reply. (A previous version computed
+            # this via api_messages[1 + starting_len:], which — because
+            # starting_len was captured AFTER appending the user message —
+            # actually started one entry too late and silently dropped the
+            # user's turn from every saved conversation.)
+            new_messages = [user_message] + api_messages[turn_start:] + [
+                {"role": "assistant", "content": final_msg.content}
+            ]
 
             ChatHistoryService.save_messages(db, chat.session_id, user_id, new_messages)
             return {
@@ -194,7 +204,6 @@ class AgentService:
             logger.exception("Agent chat (stream) request failed")
             yield json.dumps({"type": "error", "error": str(e)}) + "\n"
 
-            
     @staticmethod
     def _clean_tool_name(raw_name: str) -> str:
         """
@@ -416,7 +425,7 @@ class AgentService:
         """
         logger.info("Starting agent turn with %s messages and %s available tools", len(messages), len(tools))
 
-        msg = AgentService._safe_completion(messages, tools, tool_choice="auto")
+        msg = AgentService._safe_completion(messages, tools, tool_choice="required")
         logger.info("Initial model response received; tool_calls=%s", bool(msg.tool_calls))
 
         # With tool_choice="required", the only way msg.tool_calls is falsy is
@@ -592,6 +601,8 @@ class AgentService:
             # — CartService looks up real prices/stock itself; nothing about
             # price or total is trusted from tool_input.
             return CartService.calculate_cart(db, tool_input.get("items", []))
+        if name == "get_related_products":
+            return ProductService.get_related_products(db, **tool_input)
 
         logger.warning("Unknown tool requested: %s", name)
         return {"error": f"unknown tool {name}"}

@@ -131,3 +131,67 @@ class ProductService:
             "in_stock": in_stock,
         }
 
+
+    @staticmethod
+    def get_related_products(db: Session, product_id: int, max_price: float | None = None, limit: int = 5) -> dict:
+        """
+        Simple rule-based cross-sell/upsell — no ML, no vector search. Rules,
+        applied in order:
+        1. Same category as the anchor product (excludes the anchor itself).
+        2. In stock — checked live via check_inventory, not assumed from a
+            cached count.
+        3. Within max_price if given. This is what makes it budget-aware:
+            pass the user's remaining budget (e.g. their stated total minus the
+            price of what they just picked) and this never suggests something
+            that blows it.
+        4. Ranked by price proximity to the anchor (closest first) — keeps
+            suggestions in the same rough tier instead of pairing a ₹500 cable
+            with a ₹90,000 TV just because they share a category.
+    
+        Returns:
+        {
+            "anchor_product_id": <id>,
+            "anchor_category_id": <id>,
+            "products": [{"id","title","price","category_id","in_stock"}, ...],
+        }
+        or {"error": "..."} if the anchor product doesn't exist.
+        """
+        anchor = db.query(Product).filter(Product.id == product_id).first()
+        if not anchor:
+            return {"error": "anchor product does not exist", "products": []}
+    
+        query = db.query(Product).filter(
+            Product.category_id == anchor.category_id,
+            Product.id != anchor.id,
+        )
+        if max_price is not None:
+            query = query.filter(Product.price <= max_price)
+    
+        candidates = query.all()
+    
+        in_stock_candidates = []
+        for p in candidates:
+            inv = ProductService.check_inventory(db, product_id=p.id, quantity=1)
+            if inv and inv.get("available"):
+                in_stock_candidates.append((p, inv.get("in_stock", 0)))
+    
+        in_stock_candidates.sort(key=lambda pair: abs(float(pair[0].price) - float(anchor.price)))
+    
+        products = []
+        for product, in_stock in in_stock_candidates[:limit]:
+            products.append({
+                "id": product.id,
+                "title": product.title,
+                "price": float(product.price),
+                "category_id": product.category_id,
+                "in_stock": in_stock,
+            })
+    
+        return {
+            "anchor_product_id": anchor.id,
+            "anchor_category_id": anchor.category_id,
+            "products": products,
+        }
+    
+
+

@@ -77,6 +77,33 @@ TOOL_SCHEMAS = [
             },
         },
     },
- 
+	{
+        "type": "function",
+        "function": {
+            "name": "get_related_products",
+            "description": (
+                "Finds products related to a given product for cross-sell/upsell — "
+                "same category, in stock, and optionally within a budget. Use this "
+                "AFTER you've identified or the user has confirmed a primary product, "
+                "to suggest at most one relevant complementary or alternative item. "
+                "Always pass max_price when you know the user's remaining budget "
+                "(their stated total minus the price of what they just picked) — "
+                "never suggest something that blows their budget. Don't call this "
+                "speculatively on every turn; only for a genuine cross-sell moment "
+                "(right after confirming a product, or when the user asks what else "
+                "goes with it / what else they should get)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_id": {"type": "integer", "description": "The anchor product to find related items for."},
+                    "max_price": {"type": "number", "description": "Optional. Only suggest items at or under this price."},
+                    "limit": {"type": "integer", "description": "Optional. Max number of related products to return (default 5)."},
+                },
+                "required": ["product_id"],
+            },
+        },
+    },
+    
 
 ]

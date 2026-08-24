@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import type { ChatItem, CartSummary } from "@/lib/agentTypes";
 import { describeToolCall, describeToolResult } from "@/lib/toolDisplay";
 import { historyToChatItems } from "@/lib/chatHistory";
+import Link from "next/link";
 
 import { apiClient } from "@/lib/apiClient";
 
@@ -434,7 +435,11 @@ function ChatBubble({
 				{item.recommendations && item.recommendations.length > 0 && (
 					<div className="space-y-2">
 						{item.recommendations.map((rec) => (
-							<div key={rec.product_id} className="border border-border rounded-lg px-3 py-2 bg-background">
+							<Link
+								key={rec.product_id}
+								href={`/product/${rec.product_id}`}
+								className="block border border-border rounded-lg px-3 py-2 bg-background hover:border-black hover:shadow-sm transition-colors"
+							>
 								<div className="flex justify-between items-baseline gap-2">
 									<span className="font-medium text-sm">{rec.name}</span>
 									{rec.price !== undefined && (
@@ -446,7 +451,7 @@ function ChatBubble({
 								<p className="text-xs text-muted-foreground mt-1 italic border-t border-border/60 pt-1">
 									Why: {rec.reason}
 								</p>
-							</div>
+							</Link>
 						))}
 					</div>
 				)}
