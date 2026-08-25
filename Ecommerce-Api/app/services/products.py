@@ -9,9 +9,11 @@ from app.services.analytics import ProductAnalyticsService
 
 class ProductService:
     @staticmethod
-    def get_all_products(db: Session, page: int, limit: int, search: str = ""):
-        products = db.query(Product).filter(
-            Product.title.contains(search)).order_by(Product.id.asc()).offset((page - 1) * limit).limit(limit).all()
+    def get_all_products(db: Session, page: int, limit: int, search: str = "", category_id: int | None = None):
+        query = db.query(Product).filter(Product.title.contains(search))
+        if category_id is not None:
+            query = query.filter(Product.category_id == category_id)
+        products = query.order_by(Product.id.asc()).offset((page - 1) * limit).limit(limit).all()
         return {"message": f"Page {page} with {limit} products", "data": products}
 
     @staticmethod

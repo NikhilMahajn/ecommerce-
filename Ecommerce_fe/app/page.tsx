@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
 import { ProductCard } from '@/components/ProductCard'
 import { useToast } from '@/components/Toast'
-import { Product, CartItem } from '@/lib/types'
+import { Product, CartItem, Category } from '@/lib/types'
 import { apiClient } from '@/lib/apiClient'
 import { useAuth } from '@/lib/AuthContext'
 import ChatPanel from '@/components/ChatPanel'
+import { Sparkles, X } from 'lucide-react'
 
 export default function Home() {
   const router = useRouter()
@@ -20,6 +21,7 @@ export default function Home() {
   const [showCart, setShowCart] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const { addToast } = useToast()
 
@@ -98,12 +100,31 @@ export default function Home() {
       }))
   }
 
+  // Load categories once on mount (public endpoint, no auth needed)
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
+  const loadCategories = async () => {
+    try {
+      const response = await apiClient.getCategories({ page: 1, limit: 100 })
+      if (response.data && Array.isArray(response.data)) {
+        // Backend sends id as a JSON number — normalize to string so
+        // selected-category comparisons and filtering are consistent.
+        setCategories(response.data.map((cat: any) => ({ ...cat, id: String(cat.id) })))
+      }
+    } catch (error) {
+      console.error('[v0] Load categories error:', error)
+    }
+  }
+
   const loadProducts = async () => {
     setIsLoading(true)
     try {
       const response = await apiClient.getProducts({
         search: searchTerm || undefined,
-        categoryId: selectedCategory || undefined,
+        categoryId: selectedCategory !== null ? String(selectedCategory) : undefined,
+        limit: 100,
       })
       if (response.data) {
         setProducts(response.data)
@@ -327,19 +348,22 @@ export default function Home() {
                 >
                   All Products
                 </button>
-                {['Smartphones', 'Laptops', 'Accessories', 'Wearables'].map((cat) => (
+                {categories.map((cat) => (
                   <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(String(cat.id))}
                     className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
-                      selectedCategory === cat
+                      selectedCategory === cat.id
                         ? 'bg-accent text-accent-foreground font-semibold'
                         : 'text-foreground hover:bg-muted'
                     }`}
                   >
-                    {cat}
+                    {cat.name}
                   </button>
                 ))}
+                {categories.length === 0 && (
+                  <p className="text-sm text-muted-foreground px-4 py-2">No categories available</p>
+                )}
               </div>
             </div>
           </aside>
@@ -470,13 +494,18 @@ export default function Home() {
       {/* AI Shopping Assistant — floating launcher + drawer */}
       <button
         onClick={() => setShowChat((prev) => !prev)}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors"
-        aria-label="Open AI shopping assistant"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 pl-3.5 pr-4 py-3 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 hover:shadow-xl transition-all active:scale-95"
+        aria-label={showChat ? 'Close AI shopping assistant' : 'Open AI shopping assistant'}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.297 0-2.53-.246-3.646-.687L3 20l1.396-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-        <span className="text-sm font-semibold hidden sm:inline">Ask AI</span>
+        <span className="relative flex w-5 h-5 items-center justify-center">
+          {!showChat && (
+            <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-50 animate-ping" />
+          )}
+          <Sparkles className="relative w-5 h-5" />
+        </span>
+        <span className="text-sm font-semibold hidden sm:inline">
+          {showChat ? 'Hide Assistant' : 'Ask AI'}
+        </span>
       </button>
 
       {showChat && (
@@ -484,20 +513,29 @@ export default function Home() {
       )}
       <div
         className={`fixed bottom-24 right-6 z-50 w-[92vw] max-w-md transform transition-all duration-300 origin-bottom-right ${
-          showChat ? 'scale-100 opacity-100' : 'scale-95 opacity-0 pointer-events-none'
+          showChat ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 pointer-events-none translate-y-2'
         }`}
       >
         <div className="bg-card border border-border rounded-lg shadow-2xl overflow-hidden">
           <div className="flex justify-between items-center px-4 py-3 border-b border-border">
-            <h2 className="font-heading font-semibold text-foreground">Shopping Assistant</h2>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div>
+                <h2 className="font-heading font-semibold text-foreground leading-tight">Shopping Assistant</h2>
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 leading-tight mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse" />
+                  Online · searches your live catalog
+                </p>
+              </div>
+            </div>
             <button
               onClick={() => setShowChat(false)}
-              className="p-1 hover:bg-muted rounded-lg transition-colors"
+              className="p-1.5 hover:bg-muted rounded-lg transition-colors"
               aria-label="Close assistant"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
           <ChatPanel onCartApproved={loadCart} isAuthenticated={authLoading ? null : isAuthenticated} />

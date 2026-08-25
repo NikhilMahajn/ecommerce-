@@ -195,7 +195,7 @@ class ApiClient {
     const query = new URLSearchParams()
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) query.append(key, String(value))
+        if (value !== undefined) query.append(key === 'categoryId' ? 'category_id' : key, String(value))
       })
     }
     return this.request(`/products?${query.toString()}`)

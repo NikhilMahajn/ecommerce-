@@ -16,8 +16,9 @@ def get_all_products(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
     search: str | None = Query("", description="Search based title of products"),
+    category_id: int | None = Query(None, description="Filter products by category id"),
 ):
-    return ProductService.get_all_products(db, page, limit, search)
+    return ProductService.get_all_products(db, page, limit, search, category_id)
 
 
 # Get Product By ID

@@ -2,6 +2,7 @@ from app.routers import products, categories, carts, users, auth, accounts, orde
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.workers.pricing_worker import start_pricing_worker, stop_pricing_worker
+from app.core.exceptions import register_exception_handlers
 import logging
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ app.add_middleware(
 )
 
 app.include_router(products.router)
+register_exception_handlers(app)
 app.include_router(categories.router)
 app.include_router(carts.router)
 app.include_router(users.router)
